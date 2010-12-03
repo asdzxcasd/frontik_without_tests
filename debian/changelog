@@ -1,3 +1,9 @@
+frontik (2.7.3) unstable; urgency=low
+
+  * if we have 500 but have "noxsl" in args without "debug" in args apply xsl for debug info anyway 
+
+ -- Andrew Sumin <AndrewSumin@gmail.com>  Fri, 03 Dec 2010 15:42:02 +0300
+
 frontik (2.7.2) unstable; urgency=low
 
   * Cherry-pic bugfixes from branch 2.6
