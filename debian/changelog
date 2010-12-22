@@ -1,4 +1,4 @@
-frontik (2.7.4~dev) UNRELEASED; urgency=low
+frontik (2.7.4) unstable; urgency=low
 
   * Restore single-thread mode by default
   * Fault-tolerant loader of failed apps

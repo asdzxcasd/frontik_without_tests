@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='frontik',
-    version='2.7.4dev',
+    version='2.7.4',
 
     package_dir = {'': 'src'},
     packages = ['frontik'],
