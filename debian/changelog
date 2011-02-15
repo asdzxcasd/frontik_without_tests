@@ -1,3 +1,9 @@
+frontik (2.7.7) unstable; urgency=low
+
+  * Fix finish with 401
+
+ -- Mikhail Sabourenkov <m.saburenkov@hh.ru>  Tue, 15 Feb 2011 16:25:17 +0300
+
 frontik (2.7.6) unstable; urgency=low
 
   * Clarified 404 error case when Page class at given path is not found
