@@ -1,3 +1,9 @@
+frontik (2.7.8) unstable; urgency=low
+
+  * Fix basic auth
+
+ -- Pavel Trukhanov <ptru@putin.pyn.ru>  Thu, 17 Feb 2011 17:33:55 +0300
+
 frontik (2.7.7) unstable; urgency=low
 
   * Fix finish with 401
