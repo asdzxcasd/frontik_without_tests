@@ -1,4 +1,10 @@
-frontik (2.8.1) unstalbe; urgency=low
+frontik (2.8.2) unstable; urgency=low
+
+  * fixed changelog
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 29 Mar 2011 15:24:40 +0400
+
+frontik (2.8.1) unstable; urgency=low
 
   * fix many slashs dispath and some tests
 
@@ -6,11 +12,8 @@ frontik (2.8.1) unstalbe; urgency=low
 
 frontik (2.8.0) unstable; urgency=low
 
+  [ Pavel Trukhanov ]
   * frontik 2.8.0 with new tornado and url rewrites
-
- -- Pavel Trukhanov <p.trukhanov@hh.ru>  Mon, 21 Mar 2011 18:29:17 +0300
-
-frontik (2.8.0~dev) UNRELEASED; urgency=low
 
   [ Andrey Tatarinov ]
   * Dependency from new tornado >= 1.2.1~hh1
