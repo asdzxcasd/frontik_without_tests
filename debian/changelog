@@ -1,3 +1,9 @@
+frontik (2.8.3) unstable; urgency=low
+
+  * tornado.curl_httpclient logger suppressed by default
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 20 Apr 2011 13:14:36 +0400
+
 frontik (2.8.2) unstable; urgency=low
 
   * fixed changelog
