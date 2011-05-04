@@ -1,3 +1,9 @@
+frontik (2.8.4) unstable; urgency=low
+
+  * mutable default args fixed, which caused HH-19227
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 04 May 2011 14:32:47 +0400
+
 frontik (2.8.3) unstable; urgency=low
 
   * tornado.curl_httpclient logger suppressed by default
