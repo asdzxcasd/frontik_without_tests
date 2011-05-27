@@ -1,3 +1,9 @@
+frontik (2.8.6) unstable; urgency=low
+
+  * inheritance of status code for debug page removed. debug should always return 200ok
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Fri, 27 May 2011 14:34:50 +0400
+
 frontik (2.8.5) unstable; urgency=low
 
   * fix for mutable default args, which caused HH-19227
