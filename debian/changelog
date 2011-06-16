@@ -1,8 +1,8 @@
-frontik (2.8.7~dev) UNRELEASED; urgency=low
+frontik (2.8.7) unstable; urgency=low
 
-  * New development version
+  * new version of tornado for correct http error handling
 
- -- Ivan Fedorov <oxyum@oxyum.ru>  Wed, 08 Jun 2011 19:10:12 +0400
+ -- Alexander Shaposhnikov <a.shaposhnikov@hh.ru>  Thu, 16 Jun 2011 13:58:50 +0400
 
 frontik (2.8.6) unstable; urgency=low
 
