@@ -1,3 +1,10 @@
+frontik (2.8.8) unstable; urgency=low
+
+  * HH-20427 - runtime module import error changed from 404 to 500 + unittest
+  * drop "tornado (< 2)" restriction
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Mon, 11 Jul 2011 14:28:35 +0400
+
 frontik (2.8.7) unstable; urgency=low
 
   * new version of tornado for correct http error handling
