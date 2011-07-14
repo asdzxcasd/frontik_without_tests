@@ -1,3 +1,9 @@
+frontik (2.8.11~dev) UNRELEASED; urgency=low
+
+  * New development version
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Thu, 14 Jul 2011 18:00:01 +0400
+
 frontik (2.8.10) unstable; urgency=low
 
   * HH-20647 Tornado2.0 compatibility with url encoding
