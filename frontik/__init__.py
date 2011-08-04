@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-VERSION = (2, 9, 0, "final")
+VERSION = (2, 9, 2, "final")
 
 def get_version():
     if VERSION[3] != "final":

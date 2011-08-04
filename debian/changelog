@@ -1,3 +1,10 @@
+frontik (2.9.2) unstable; urgency=low
+
+  * mistypping fixed
+  * response parse error handling refactored
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Thu, 04 Aug 2011 14:43:48 +0400
+
 frontik (2.9.1) unstable; urgency=low
 
   [ Pavel Trukhanov ]
