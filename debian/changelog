@@ -1,8 +1,8 @@
-frontik (2.8.11~dev) UNRELEASED; urgency=low
+frontik (2.8.11) unstable; urgency=low
 
-  * New development version
+  * syslog facility option added
 
- -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Thu, 14 Jul 2011 18:00:01 +0400
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 09 Aug 2011 11:35:18 +0400
 
 frontik (2.8.10) unstable; urgency=low
 
