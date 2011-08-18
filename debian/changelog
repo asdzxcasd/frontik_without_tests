@@ -1,3 +1,9 @@
+frontik (2.9.6) unstable; urgency=low
+
+  * HH-16162 format syslog fixed
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Thu, 18 Aug 2011 16:37:47 +0400
+
 frontik (2.9.5) unstable; urgency=low
 
   * HH-21276 killing test instances if test fail
@@ -12,7 +18,7 @@ frontik (2.9.4) unstable; urgency=low
 
 frontik (2.9.3) unstable; urgency=low
 
-  * syslog facility option added
+  * HH-16162 syslog facility option added
 
  -- Pavel Trukhanov <p.trukhanov@hh.ru>  Tue, 09 Aug 2011 11:35:18 +0400
 
