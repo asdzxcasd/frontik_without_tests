@@ -1,3 +1,9 @@
+frontik (2.9.7) unstable; urgency=low
+
+  * HH-21428 removed comparing None with bool
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Mon, 22 Aug 2011 17:31:09 +0400
+
 frontik (2.9.6) unstable; urgency=low
 
   * HH-16162 format syslog fixed
