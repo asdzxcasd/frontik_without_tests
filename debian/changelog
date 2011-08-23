@@ -1,3 +1,9 @@
+frontik (2.9.9) unstable; urgency=low
+
+  * AsyncGroup loger delete fix 
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Tue, 23 Aug 2011 17:26:39 +0400
+
 frontik (2.9.8) unstable; urgency=low
 
   * HH-21519 fixed double stack trace fro xslt in error log
