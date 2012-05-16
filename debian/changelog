@@ -1,3 +1,9 @@
+frontik (2.11.2) unstable; urgency=low
+
+  * allow header typo
+
+ -- Pavel Trukhanov <p.trukhanov@hh.ru>  Wed, 16 May 2012 10:22:24 +0400
+
 frontik (2.11.1) unstable; urgency=low
 
   * copy.deepcopy on xml before xslt
@@ -391,7 +397,7 @@ frontik (0.21.0) unstable; urgency=low
   * debug mode
   * http basic auth for noxsl and debug modes
 
- -- Dmitry Zubov <d.zubov@hh.ru> Fri, 2 Jul 2010 14:49:00 +0400
+ -- Dmitry Zubov <d.zubov@hh.ru>  Fri, 02 Jul 2010 14:49:00 +0400
 
 frontik (0.20.11) unstable; urgency=low
 
