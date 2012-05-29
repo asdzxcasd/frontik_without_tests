@@ -1,3 +1,10 @@
+frontik (2.12.3) unstable; urgency=low
+
+  [ Georgiy Danschin ]
+  * HH-26489 fix error in need_finish condition 
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Tue, 29 May 2012 12:54:53 +0400
+
 frontik (2.12.2) unstable; urgency=low
 
   [ Vasily Katraev ]
