@@ -1,3 +1,10 @@
+frontik (2.13.3) unstable; urgency=low
+
+  [ Andrey Sumin ]
+  * HH-28214 copy.deepcopy xml from cache for lxml thread safety
+
+ -- Vasily Katraev (hh.ru) <v.katraev@hh.ru>  Mon, 01 Oct 2012 16:59:23 +0400
+
 frontik (2.13.2) unstable; urgency=low
 
   * HH-28714 write Monik-stages log entry
