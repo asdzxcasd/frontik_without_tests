@@ -1,3 +1,9 @@
+frontik (2.17.6) unstable; urgency=low
+
+  * HH-31752 improve response text handling in debug output
+
+ -- Andrey Sumin <an.sumin@hh.ru>  Tue, 19 Mar 2013 12:04:47 +0400
+
 frontik (2.17.5) unstable; urgency=low
 
   * HH-32313 fixes for graylog
