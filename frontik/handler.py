@@ -12,16 +12,18 @@ from tornado.ioloop import IOLoop
 import tornado.options
 import tornado.web
 
+import frontik.argument_parser
 from frontik.async import AsyncGroup
 import frontik.auth
 import frontik.handler_active_limit
 from frontik.handler_debug import PageHandlerDebug
 from frontik.http_client import HttpClient
-import frontik.util
+from frontik.http_codes import process_status_code
 import frontik.producers.json_producer
 import frontik.producers.xml_producer
-from frontik.http_codes import process_status_code
 import frontik.sentry
+import frontik.util
+from frontik.util import iteritems
 
 
 class HTTPError(tornado.web.HTTPError):
@@ -130,18 +132,6 @@ class BaseHandler(tornado.web.RequestHandler):
             'Server': 'Frontik/{0}'.format(frontik.version)
         })
 
-    def decode_argument(self, value, name=None):
-        try:
-            return super(BaseHandler, self).decode_argument(value, name)
-        except (UnicodeError, tornado.web.HTTPError):
-            self.log.warning('cannot decode utf-8 query parameter, trying other charsets')
-
-        try:
-            return frontik.util.decode_string_from_charset(value)
-        except UnicodeError:
-            self.log.exception('cannot decode argument, ignoring invalid chars')
-            return value.decode('utf-8', 'ignore')
-
     def set_status(self, status_code, reason=None):
         status_code, reason = process_status_code(status_code, reason)
         super(BaseHandler, self).set_status(status_code, reason=reason)
@@ -153,6 +143,38 @@ class BaseHandler(tornado.web.RequestHandler):
     @staticmethod
     def add_timeout(deadline, callback):
         IOLoop.instance().add_timeout(deadline, callback)
+
+    # Arguments parsing
+
+    Arg = frontik.argument_parser.Arg
+
+    def parse_arguments(self, args):
+        return {
+            name: self._parse_argument(name if arg.name is None else arg.name, arg) for name, arg in iteritems(args)
+        }
+
+    def parse_argument(self, name, arg_type, default=Arg._ARG_DEFAULT, choice=None, default_on_error=False):
+        return self._parse_argument(
+            name, PageHandler.Arg(arg_type, default=default, choice=choice, default_on_error=default_on_error)
+        )
+
+    def _parse_argument(self, name, arg):
+        try:
+            return arg.parse(name, self.get_arguments(name))
+        except ValueError as e:
+            raise HTTPError(400, e.args[0])
+
+    def decode_argument(self, value, name=None):
+        try:
+            return super(BaseHandler, self).decode_argument(value, name)
+        except tornado.web.HTTPError:
+            self.log.warning('cannot decode utf-8 query parameter, trying other charsets')
+
+        try:
+            return frontik.util.decode_string_from_charset(value)
+        except UnicodeError:
+            self.log.exception('cannot decode argument, ignoring invalid chars')
+            return value.decode('utf-8', 'ignore')
 
     # Requests handling
 
@@ -322,7 +344,7 @@ class BaseHandler(tornado.web.RequestHandler):
         )
 
         if headers:
-            for (name, value) in headers.iteritems():
+            for (name, value) in iteritems(headers):
                 self.set_header(name, value)
 
         if finish_with_exception:
