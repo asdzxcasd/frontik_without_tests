@@ -7,6 +7,9 @@ tornado.options.define('app', default=None, type=str)
 tornado.options.define('tornado_settings', default=None, type=dict)
 tornado.options.define('handlers_count', default=100, type=int)
 
+tornado.options.define('http_client_default_connect_timeout', default=0.2, type=int)
+tornado.options.define('http_client_default_request_timeout', default=2.0, type=int)
+
 tornado.options.define('logfile', default=None, type=str, help='log file name')
 tornado.options.define('loglevel', default='info', type=str, help='log level')
 tornado.options.define('logformat', default='[%(process)s] %(asctime)s %(levelname)s %(name)s: %(message)s', type=str)
