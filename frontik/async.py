@@ -18,7 +18,7 @@ class AsyncGroup(object):
     would not be automatically called.
     """
 
-    def __init__(self, finish_cb, log=default_logger.debug, name=None, logger=None):
+    def __init__(self, finish_cb, name=None, logger=None):
         self._counter = 0
         self._finish_cb = finish_cb
         self._finish_cb_called = False
