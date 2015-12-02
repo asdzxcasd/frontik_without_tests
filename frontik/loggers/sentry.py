@@ -1,12 +1,45 @@
-# coding: utf-8
+# coding=utf-8
+
+import logging
+
 from tornado.httpclient import AsyncHTTPClient
 from tornado.options import options
+from tornado.web import HTTPError
 
 try:
     from raven.contrib.tornado import AsyncSentryClient as OriginalAsyncSentryClient
     has_raven = True
 except ImportError:
     has_raven = False
+
+
+def bootstrap_logger(app):
+    dsn = app.settings.get('sentry_dsn')
+    if not dsn:
+        return None
+
+    if not has_raven:
+        logging.getLogger('frontik.loggers').warning('sentry_dsn set but raven not avalaible')
+        return None
+
+    def logger_initializer(handler):
+
+        # Defer logger creation after exception actually occurs
+        def log_exception_to_sentry(typ, value, tb):
+            if isinstance(value, HTTPError):
+                return
+
+            if not hasattr(handler, '_sentry_logger'):
+                handler._sentry_logger = SentryLogger(sentry_client, handler.request)
+                handler.initialize_sentry_logger(handler._sentry_logger)
+
+            handler._sentry_logger.capture_exception(exc_info=(typ, value, tb))
+
+        sentry_client = AsyncSentryClient(dsn=dsn, http_client=app.curl_http_client)
+        handler.register_exception_hook(log_exception_to_sentry)
+
+    return logger_initializer
+
 
 if has_raven:
     class AsyncSentryClient(OriginalAsyncSentryClient):
@@ -28,8 +61,7 @@ if has_raven:
                 request_timeout=options.http_client_default_request_timeout
             )
 
-    class SentryHandler(object):
-
+    class SentryLogger(object):
         def __init__(self, sentry_client, request):
             """
             :type request: tornado.httpserver.HTTPRequest
