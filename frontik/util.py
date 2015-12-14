@@ -4,12 +4,16 @@ import mimetools
 import mimetypes
 import re
 from urllib import urlencode
-import urlparse
 
 from tornado.httpclient import HTTPRequest
 from tornado.httputil import HTTPHeaders
 
-from frontik.compat import iteritems
+from frontik.compat import iteritems, PY3
+
+if PY3:
+    import urllib.parse as urlparse
+else:
+    import urlparse
 
 
 def list_unique(l):

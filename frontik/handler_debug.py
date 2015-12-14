@@ -9,7 +9,6 @@ import os
 import pprint
 import time
 import traceback
-import urlparse
 import weakref
 
 import simplejson as json
@@ -30,8 +29,10 @@ import frontik.xml_util
 
 if PY3:
     from io import StringIO
+    import urllib.parse as urlparse
 else:
     from cStringIO import StringIO
+    import urlparse
 
 debug_log = logging.getLogger('frontik.debug')
 
