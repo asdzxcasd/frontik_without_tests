@@ -92,9 +92,6 @@ if has_raven:
             new_data = {k: v for k, v in new_data.iteritems() if v is not None}
             self.user_info.update(new_data)
 
-        def set_full_url(self, url):
-            self.url = url
-
         def capture_exception(self, exc_info=None, extra_data=None, **kwargs):
             """
             Additional kwargs passed to raven.base.Client#captureException:
