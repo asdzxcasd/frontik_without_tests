@@ -23,19 +23,23 @@ def bootstrap_logger(app):
         return None
 
     def logger_initializer(handler):
+        sentry_client = AsyncSentryClient(dsn=dsn, http_client=app.curl_http_client)
+
+        def get_sentry_logger():
+            if not hasattr(handler, 'sentry_logger'):
+                handler.sentry_logger = SentryLogger(sentry_client, handler.request)
+                handler.initialize_sentry_logger(handler.sentry_logger)
+
+            return handler.sentry_logger
 
         # Defer logger creation after exception actually occurs
         def log_exception_to_sentry(typ, value, tb):
             if isinstance(value, HTTPError):
                 return
 
-            if not hasattr(handler, '_sentry_logger'):
-                handler._sentry_logger = SentryLogger(sentry_client, handler.request)
-                handler.initialize_sentry_logger(handler._sentry_logger)
+            handler.get_sentry_logger().capture_exception(exc_info=(typ, value, tb))
 
-            handler._sentry_logger.capture_exception(exc_info=(typ, value, tb))
-
-        sentry_client = AsyncSentryClient(dsn=dsn, http_client=app.curl_http_client)
+        handler.get_sentry_logger = get_sentry_logger
         handler.register_exception_hook(log_exception_to_sentry)
 
     return logger_initializer
@@ -78,7 +82,7 @@ if has_raven:
         def set_request_extra_data(self, request_extra_data):
             """
             :type request_extra_data: dict
-            :param request_extra_data: data is sent with any exception or message
+            :param request_extra_data: extra data to be sent with any exception or message
             """
             self.request_extra_data = request_extra_data
 
@@ -108,7 +112,7 @@ if has_raven:
 
         def _collect_sentry_data(self, extra_data):
             data = {
-                # url & method are required
+                # url and method are required
                 # see http://sentry.readthedocs.org/en/latest/developer/interfaces/#sentry.interfaces.http.Http
                 'request': {
                     'url': self.url,
@@ -119,7 +123,7 @@ if has_raven:
                     'headers': dict(self.request.headers),
                 },
 
-                # either an id or ip_address is required
+                # either user id or ip_address is required
                 # see http://sentry.readthedocs.org/en/latest/developer/interfaces/#sentry.interfaces.user.User
                 'user': self.user_info,
 
