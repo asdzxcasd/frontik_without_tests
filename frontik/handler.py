@@ -245,27 +245,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.finish_group.finish()
 
     def _finish_page_cb(self):
-        if not self._finished:
-            def _callback():
-                self.log.stage_tag('page')
-
-                if self.text is not None:
-                    producer = self._generic_producer
-                elif not self.json.is_empty():
-                    producer = self.json_producer
-                else:
-                    producer = self.xml_producer
-
-                self.log.debug('using %s producer', producer)
-
-                if self.apply_postprocessor:
-                    producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
-                else:
-                    producer(self.finish)
-
-            self._call_postprocessors(self._early_postprocessors, _callback)
-        else:
-            self.log.warning('trying to finish already finished page, probably bug in a workflow, ignoring')
+        self.finish(with_postprocessors=True)
 
     def on_connection_close(self):
         self.finish_group.abort()
@@ -361,7 +341,19 @@ class BaseHandler(tornado.web.RequestHandler):
         if hasattr(self, 'active_limit'):
             self.active_limit.release()
 
-    def finish(self, chunk=None):
+    def finish(self, chunk=None, with_postprocessors=False):
+        if self._finished:
+            self.log.warning('trying to finish already finished page, probably bug in a workflow, ignoring')
+            return
+
+        def _late_pp():
+            try:
+                self._call_postprocessors(self._late_postprocessors, _finish_with_async_hook)
+            except:
+                self.log.exception('error during late postprocessing stage, finishing with an exception')
+                self._status_code = 500
+                _finish_with_async_hook()
+
         def _finish_with_async_hook():
             self.log.stage_tag('postprocess')
             super(BaseHandler, self).finish(chunk)
@@ -373,12 +365,27 @@ class BaseHandler(tornado.web.RequestHandler):
                 partial(self.log.request_finish_hook, self._status_code, self.request.method, self.request.uri)
             )
 
-        try:
-            self._call_postprocessors(self._late_postprocessors, _finish_with_async_hook)
-        except:
-            self.log.exception('error during late postprocessing stage, finishing with an exception')
-            self._status_code = 500
-            _finish_with_async_hook()
+        def _callback():
+            self.log.stage_tag('page')
+
+            if self.text is not None:
+                producer = self._generic_producer
+            elif not self.json.is_empty():
+                producer = self.json_producer
+            else:
+                producer = self.xml_producer
+
+            self.log.debug('using %s producer', producer)
+
+            if self.apply_postprocessor:
+                producer(partial(self._call_postprocessors, self._template_postprocessors, _late_pp))
+            else:
+                producer(_late_pp)
+
+        if with_postprocessors:
+            self._call_postprocessors(self._early_postprocessors, _callback)
+        else:
+            _late_pp()
 
     def flush(self, include_footers=False, **kwargs):
         self.log.stage_tag('finish')
