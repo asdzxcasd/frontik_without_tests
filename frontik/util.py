@@ -3,7 +3,6 @@
 from email.generator import _make_boundary
 import mimetypes
 import re
-from urllib import urlencode
 
 from tornado.httpclient import HTTPRequest
 from tornado.httputil import HTTPHeaders
@@ -12,7 +11,9 @@ from frontik.compat import iteritems, PY3
 
 if PY3:
     import urllib.parse as urlparse
+    from urllib.parse import urlencode
 else:
+    from urllib import urlencode
     import urlparse
 
 
