@@ -133,21 +133,21 @@ class FileMappingDispatcher(object):
             return self.handle_404(application, request, logger, **kwargs)
         except:
             logger.exception('error while importing %s module', page_module_name)
-            return ErrorHandler(application, request, logger, status_code=500, **kwargs)
+            return ErrorHandler, {'status_code': 500}
 
         if not hasattr(page_module, 'Page'):
             logger.error('%s.Page class not found', page_module_name)
             return self.handle_404(application, request, logger, **kwargs)
 
-        return page_module.Page(application, request, logger, **kwargs)
+        return page_module.Page, {}
 
     def __repr__(self):
         return '{}.{}(<{}, handler_404={}>)'.format(__package__, self.__class__.__name__, self.name, self.handler_404)
 
     def handle_404(self, application, request, logger, **kwargs):
         if self.handler_404 is not None:
-            return self.handler_404(application, request, logger, **kwargs)
-        return ErrorHandler(application, request, logger, status_code=404, **kwargs)
+            return self.handler_404(request, logger)
+        return ErrorHandler, {'status_code': 404}
 
 
 class RegexpDispatcher(object):
@@ -175,13 +175,13 @@ class RegexpDispatcher(object):
                     return app(application, request, logger, **kwargs)
                 except tornado.web.HTTPError as e:
                     logger.exception('tornado error: %s in %r', e, app)
-                    return ErrorHandler(application, request, logger, status_code=e.status_code, **kwargs)
+                    return ErrorHandler, {'status_code': e.code}
                 except Exception as e:
                     logger.exception('error handling request: %s in %r', e, app)
-                    return ErrorHandler(application, request, logger, status_code=500, **kwargs)
+                    return ErrorHandler, {'status_code': 500}
 
         logger.error('match for request url "%s" not found', request.uri)
-        return ErrorHandler(application, request, logger, status_code=404, **kwargs)
+        return ErrorHandler, {'status_code': 404}
 
     def __repr__(self):
         return '{}.{}(<{} routes>)'.format(__package__, self.__class__.__name__, len(self.apps))
@@ -201,7 +201,31 @@ def app_dispatcher(tornado_app, request, **kwargs):
     return tornado_app.dispatcher(tornado_app, request, request_logger, request_id=request_id, **kwargs)
 
 
+class RequestDispatcher(tornado.web._RequestDispatcher):
+    def _find_handler(self):
+        request = self.request
+        request_id = request.headers.get('X-Request-Id', str(global_stats.next_request_id()))
+        request_logger = frontik_logging.RequestLogger(request, request_id)
+
+        def add_leading_slash(value):
+            return value if value.startswith('/') else '/' + value
+
+        app_root_url_len = len(options.app_root_url)
+        set_rewritten_request_attribute(request, 'uri', add_leading_slash(request.uri[app_root_url_len:]))
+        set_rewritten_request_attribute(request, 'path', add_leading_slash(request.path[app_root_url_len:]))
+
+        h, kwargs = self.application.dispatcher(self.application, request, request_logger, request_id=request_id)
+        self.handler_class = h
+        self.handler_kwargs = kwargs
+        kwargs['logger'] = request_logger
+        kwargs['request_id'] = request_id
+        return h
+
 class FrontikApplication(tornado.web.Application):
+    def start_request(self, server_conn, request_conn):
+        print request_conn, server_conn
+        return RequestDispatcher(self, request_conn)
+
     class DefaultConfig(object):
         pass
 
@@ -216,7 +240,7 @@ class FrontikApplication(tornado.web.Application):
             (r'/status/?', StatusHandler),
             (r'/types_count/?', CountTypesHandler),
             (r'/pdb/?', PdbHandler),
-            (r'{}.*'.format(settings.get('app_root_url')), app_dispatcher),
+            # (r'{}.*'.format(settings.get('app_root_url')), app_dispatcher),
         ], **tornado_settings)
 
         self.config = self.application_config()
