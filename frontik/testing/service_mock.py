@@ -51,7 +51,7 @@ class HTTPResponseStub(HTTPResponse):
         )
 
 
-class DummyConnection(object):
+class DummyConnection(tornado.httputil.HTTPConnection):
     class DummyStream(object):
         def set_close_callback(self, callback):
             pass
@@ -64,6 +64,9 @@ class DummyConnection(object):
         pass
 
     def finish(self):
+        pass
+
+    def write_headers(self, start_line, headers, chunk=None, callback=None):
         pass
 
     def set_close_callback(self, callback):
@@ -142,17 +145,6 @@ class ServiceMock(object):
                                 headers=HTTPHeaders({'Content-Type': 'xml'}))
 
 
-def application_mock(handlers, config):
-    class Mock(frontik.app.FrontikApplication):
-        def application_urls(self):
-            return handlers
-
-        def application_config(self):
-            return config
-
-    return Mock
-
-
 class EmptyEnvironment(object):
 
     class LocalHandlerConfig(object):
@@ -162,7 +154,7 @@ class EmptyEnvironment(object):
         self.log = getLogger('service_mock')
         self._config = EmptyEnvironment.LocalHandlerConfig()
 
-        self._request = tornado.httpserver.HTTPRequest('GET', '/', remote_ip='127.0.0.1')
+        self._request = tornado.httpserver.HTTPRequest('GET', '/')
         self._request.connection = DummyConnection()
 
         self._registry = {}
@@ -228,10 +220,17 @@ class EmptyEnvironment(object):
         return self._call_function(page_handler, raise_exceptions)
 
     def _call_function(self, handler_class, raise_exceptions=True):
+        environment = self
+
+        class ApplicationMock(frontik.app.FrontikApplication):
+            def application_urls(self):
+                return [('', handler_class)]
+
+            def application_config(self):
+                return environment._config
+
         # Create application with the only route — handler_class
-        application = application_mock([('', handler_class)], self._config)(**{
-            'app': 'frontik.testing',
-        })
+        application = ApplicationMock(app='frontik.testing')
 
         for (key, value) in iteritems(self.application_kwargs):
             setattr(application, key, value)
@@ -263,7 +262,12 @@ class EmptyEnvironment(object):
 
         handler_class.flush = flush
 
-        self._handler = application(self._request)
+        dispatcher = frontik.app._FrontikRequestDispatcher(application, None)
+        dispatcher.set_request(self._request)
+        dispatcher.execute()
+
+        self._handler = dispatcher.handler
+
         IOLoop.instance().start()
 
         if raise_exceptions and exceptions:

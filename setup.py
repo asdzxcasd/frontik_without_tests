@@ -54,7 +54,7 @@ setup(
         'simplejson >= 2.3.2',
         'pycurl >= 7.19.0',
         'jinja2 >= 2.6',
-        'tornado >= 3.2.2, < 4',
+        'tornado >= 4',
     ],
     test_suite='tests',
     tests_require=[
