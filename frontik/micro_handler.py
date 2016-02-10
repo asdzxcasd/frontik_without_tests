@@ -4,10 +4,10 @@ from collections import namedtuple
 from functools import partial
 
 from frontik.compat import iteritems
-from frontik.handler import BaseHandler, HTTPError
+from frontik.handler import BaseHandlerWithAllProducers, HTTPError
 
 
-class MicroHandler(BaseHandler):
+class MicroHandler(BaseHandlerWithAllProducers):
 
     _Request = namedtuple('_Request', ('method', 'host', 'uri', 'kwargs'))
 

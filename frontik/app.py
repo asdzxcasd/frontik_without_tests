@@ -195,11 +195,14 @@ class FrontikApplication(tornado.web.Application):
         self.app_settings = settings
         self.config = self.application_config()
         self.app = settings.get('app')
-        self.xml = frontik.producers.xml_producer.ApplicationXMLGlobals(self.config)
-        self.json = frontik.producers.json_producer.ApplicationJsonGlobals(self.config)
         self.curl_http_client = tornado.curl_httpclient.CurlAsyncHTTPClient(max_clients=200)
         self.dispatcher = RegexpDispatcher(self.application_urls(), self.app)
+
         self.loggers_initializers = frontik.loggers.bootstrap_app_loggers(self)
+        self._producers_initializers = frontik.producers.bootstrap_app_producers(self)
+
+    def initialize_producer(self, name, handler):
+        return self._producers_initializers.get(name)(handler)
 
     def application_urls(self):
         return [

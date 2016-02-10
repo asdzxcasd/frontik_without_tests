@@ -21,6 +21,8 @@ import frontik.producers.json_producer
 import frontik.producers.xml_producer
 import frontik.util
 
+from frontik.producers import jinja_producer, xslt_producer
+
 
 class HTTPError(tornado.web.HTTPError):
     """
@@ -89,14 +91,6 @@ class BaseHandler(tornado.web.RequestHandler):
     def prepare(self):
         self.active_limit = frontik.handler_active_limit.PageHandlerActiveLimit(self)
         self.debug = PageHandlerDebug(self)
-
-        self.json_producer = frontik.producers.json_producer.JsonProducer(
-            self, self.application.json, getattr(self, 'json_encoder', None))
-        self.json = self.json_producer.json
-
-        self.xml_producer = frontik.producers.xml_producer.XmlProducer(self, self.application.xml)
-        self.xml = self.xml_producer  # deprecated synonym
-        self.doc = self.xml_producer.doc
         self.finish_group = AsyncGroup(self.check_finished(self._finish_page_cb), name='finish', logger=self.log)
         self._prepared = True
 
@@ -244,20 +238,16 @@ class BaseHandler(tornado.web.RequestHandler):
         if not self._finished:
             def _callback():
                 self.log.stage_tag('page')
-
-                if self.text is not None:
-                    producer = self._generic_producer
-                elif not self.json.is_empty():
-                    producer = self.json_producer
-                else:
-                    producer = self.xml_producer
-
-                self.log.debug('using %s producer', producer)
-                producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
+                self.produce_response(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
 
             self._call_postprocessors(self._early_postprocessors, _callback)
         else:
             self.log.warning('trying to finish already finished page, probably bug in a workflow, ignoring')
+
+    def produce_response(self, callback):
+        callback(self.text)
+
+    produce_plaintext_response = produce_response
 
     def on_connection_close(self):
         self.finish_group.abort()
@@ -277,77 +267,6 @@ class BaseHandler(tornado.web.RequestHandler):
 
         for exception_hook in self._exception_hooks:
             exception_hook(typ, value, tb)
-
-    def send_error(self, status_code=500, **kwargs):
-        self.log.stage_tag('page')
-
-        if self._headers_written:
-            super(BaseHandler, self).send_error(status_code, **kwargs)
-
-        self.clear()
-
-        reason = None
-        if 'exc_info' in kwargs:
-            exception = kwargs['exc_info'][1]
-            if isinstance(exception, HTTPError) and exception.reason:
-                reason = exception.reason
-
-        self.set_status(status_code, reason=reason)
-
-        try:
-            self.write_error(status_code, **kwargs)
-        except Exception:
-            self.log.exception('Uncaught exception in write_error')
-            if not self._finished:
-                self.finish()
-
-    def write_error(self, status_code=500, **kwargs):
-        # write_error in Frontik must be asynchronous when handling custom errors (due to XSLT)
-        # e.g. raise HTTPError(503) is syncronous and generates a standard Tornado error page,
-        # whereas raise HTTPError(503, xml=...) will call finish_with_postprocessors()
-
-        # the solution is to move self.finish() from send_error to write_error
-        # so any write_error override must call either finish() or finish_with_postprocessors() in the end
-
-        # in Tornado 3 it may be better to rewrite this mechanism with futures
-
-        if 'exc_info' in kwargs:
-            exception = kwargs['exc_info'][1]
-        else:
-            exception = None
-
-        headers = getattr(exception, 'headers', None)
-        override_content = any(getattr(exception, x, None) is not None for x in ('text', 'xml', 'json'))
-
-        finish_with_exception = exception is not None and (
-            199 < status_code < 400 or  # raise HTTPError(200) to finish page immediately
-            override_content
-        )
-
-        if headers:
-            for (name, value) in iteritems(headers):
-                self.set_header(name, value)
-
-        if finish_with_exception:
-            self.json.clear()
-
-            if getattr(exception, 'text', None) is not None:
-                self.doc.clear()
-                self.text = exception.text
-            elif getattr(exception, 'json', None) is not None:
-                self.text = None
-                self.doc.clear()
-                self.json.put(exception.json)
-            elif getattr(exception, 'xml', None) is not None:
-                self.text = None
-                # cannot clear self.doc due to backwards compatibility, a bug actually
-                self.doc.put(exception.xml)
-
-            self.finish_with_postprocessors()
-            return
-
-        self.set_header('Content-Type', 'text/html; charset=UTF-8')
-        return super(BaseHandler, self).write_error(status_code, **kwargs)
 
     def cleanup(self):
         if hasattr(self, 'active_limit'):
@@ -450,27 +369,92 @@ class BaseHandler(tornado.web.RequestHandler):
     def add_late_postprocessor(self, postprocessor):
         self._late_postprocessors.append(postprocessor)
 
-    # Producers
 
-    def _generic_producer(self, callback):
-        self.log.debug('finishing plaintext')
-        callback(self.text)
+class BaseHandlerWithAllProducers(jinja_producer.JinjaMixin, xslt_producer.XsltMixin, BaseHandler):
+    def produce_response(self, callback):
+        if self.text is not None:
+            producer = self.produce_plaintext_response
+        elif not self.json.is_empty():
+            producer = self.produce_jinja_json_response
+        else:
+            producer = self.produce_xslt_xml_response
 
-    # Deprecated, use self.text directly
-    def set_plaintext_response(self, text):
-        self.text = text
+        self.log.debug('using %s producer', producer)
+        producer(callback)
 
-    def xml_from_file(self, filename):
-        return self.xml_producer.xml_from_file(filename)
+    def send_error(self, status_code=500, **kwargs):
+        self.log.stage_tag('page')
 
-    def set_xsl(self, filename):
-        return self.xml_producer.set_xsl(filename)
+        if self._headers_written:
+            super(BaseHandler, self).send_error(status_code, **kwargs)
 
-    def set_template(self, filename):
-        return self.json_producer.set_template(filename)
+        self.clear()
+
+        reason = None
+        if 'exc_info' in kwargs:
+            exception = kwargs['exc_info'][1]
+            if isinstance(exception, HTTPError) and exception.reason:
+                reason = exception.reason
+
+        self.set_status(status_code, reason=reason)
+
+        try:
+            self.write_error(status_code, **kwargs)
+        except Exception:
+            self.log.exception('Uncaught exception in write_error')
+            if not self._finished:
+                self.finish()
+
+    def write_error(self, status_code=500, **kwargs):
+        # write_error in Frontik must be asynchronous when handling custom errors (due to XSLT)
+        # e.g. raise HTTPError(503) is syncronous and generates a standard Tornado error page,
+        # whereas raise HTTPError(503, xml=...) will call finish_with_postprocessors()
+
+        # the solution is to move self.finish() from send_error to write_error
+        # so any write_error override must call either finish() or finish_with_postprocessors() in the end
+
+        # in Tornado 3 it may be better to rewrite this mechanism with futures
+
+        if 'exc_info' in kwargs:
+            exception = kwargs['exc_info'][1]
+        else:
+            exception = None
+
+        headers = getattr(exception, 'headers', None)
+        override_content = any(getattr(exception, x, None) is not None for x in ('text', 'xml', 'json'))
+
+        finish_with_exception = exception is not None and (
+            199 < status_code < 400 or  # raise HTTPError(200) to finish page immediately
+            override_content
+        )
+
+        if headers:
+            for (name, value) in iteritems(headers):
+                self.set_header(name, value)
+
+        if finish_with_exception:
+            self.json.clear()
+
+            if getattr(exception, 'text', None) is not None:
+                self.doc.clear()
+                self.text = exception.text
+            elif getattr(exception, 'json', None) is not None:
+                self.text = None
+                self.doc.clear()
+                self.json.put(exception.json)
+            elif getattr(exception, 'xml', None) is not None:
+                self.text = None
+                # cannot clear self.doc due to backwards compatibility, a bug actually
+                self.doc.put(exception.xml)
+
+            self.finish_with_postprocessors()
+            return
+
+        self.set_header('Content-Type', 'text/html; charset=UTF-8')
+        return super(BaseHandler, self).write_error(status_code, **kwargs)
 
 
-class PageHandler(BaseHandler):
+class PageHandler(BaseHandlerWithAllProducers):
     def __init__(self, application, request, logger, request_id=None, **kwargs):
         super(PageHandler, self).__init__(application, request, logger, request_id, **kwargs)
 
