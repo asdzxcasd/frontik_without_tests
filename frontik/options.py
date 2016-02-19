@@ -13,6 +13,7 @@ tornado.options.define('host', '0.0.0.0', str)
 tornado.options.define('port', 8080, int)
 tornado.options.define('daemonize', False, bool)
 tornado.options.define('pidfile', default=None, help='Set the name of pidfile')
+tornado.options.define('affinity', None, int, help='Set the affinity of the process')
 
 tornado.options.define('autoreload', True, bool)
 tornado.options.define('stop_timeout', 3, int)

@@ -54,11 +54,28 @@ def parse_configs_and_start(config_files):
         pidfile.write(str(os.getpid()))
         pidfile.close()
 
+    if options.affinity is not None:
+        set_affinity(mask=options.affinity)
+
     bootstrap_core_logging()
 
     for config in configs_to_read:
         log.debug('using config: %s', config)
         tornado.autoreload.watch(config)
+
+
+def set_affinity(pid=0, mask=1):
+    import ctypes
+    
+    _libc = ctypes.CDLL('libc.so.6')
+    __setaffinity = _libc.sched_setaffinity
+    __setaffinity.argtypes = [ctypes.c_int, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+
+    mask = ctypes.c_ulong(mask)
+    c_ulong_size = ctypes.sizeof(ctypes.c_ulong)
+    if __setaffinity(pid, c_ulong_size, mask) < 0:
+        raise OSError
+    return
 
 
 def run_server(app, on_stop_request=lambda: None, on_ioloop_stop=lambda: None):

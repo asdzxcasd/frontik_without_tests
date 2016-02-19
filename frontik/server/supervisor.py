@@ -46,6 +46,7 @@ from tornado.options import options
 
 tornado.options.define('start_port', 8000, int)
 tornado.options.define('workers_count', 4, int)
+tornado.options.define('set_affinity', False, bool)
 tornado.options.define('logfile_template', None, str)
 tornado.options.define('pidfile_template', None, str)
 tornado.options.define('supervisor_sigterm_timeout', 4, int)
@@ -123,6 +124,9 @@ def start_worker(script, config=None, port=None, app=None):
 
     if options.with_coverage:
         args = ['coverage', 'run'] + args
+
+    if options.set_affinity:
+        args.append('--affinity={}'.format(1 << (port - options.start_port)))
 
     STARTER_SCRIPTS[port] = subprocess.Popen(args)
     return STARTER_SCRIPTS[port]
@@ -268,6 +272,10 @@ def supervisor(script, config, app):
             min(new_soft_limit, cur_hard_limit)
         )
         resource.setrlimit(resource.RLIMIT_NOFILE, (min(new_soft_limit, cur_hard_limit), cur_hard_limit))
+
+    if options.set_affinity:
+        import multiprocessing
+        options.workers_count = multiprocessing.cpu_count()
 
     if cmd == 'start':
         start(script, app, config)
