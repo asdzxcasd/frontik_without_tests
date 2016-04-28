@@ -7,7 +7,7 @@ import re
 from tornado.httpclient import HTTPRequest
 from tornado.httputil import HTTPHeaders
 
-from frontik.compat import iteritems, PY3
+from frontik.compat import iteritems, PY3, unicode_type
 
 if PY3:
     import urllib.parse as urlparse
@@ -22,7 +22,7 @@ def list_unique(l):
 
 
 def _encode(s):
-    if isinstance(s, unicode):
+    if isinstance(s, unicode_type):
         return s.encode('utf-8')
     else:
         return s
@@ -63,7 +63,7 @@ def make_url(base, **query_args):
 
 
 def decode_string_from_charset(string, charsets=('cp1251',)):
-    if isinstance(string, unicode):
+    if isinstance(string, unicode_type):
         return string
 
     decoded_body = None
