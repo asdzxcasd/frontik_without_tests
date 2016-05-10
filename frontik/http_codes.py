@@ -7,8 +7,10 @@ if PY3:
 else:
     import httplib as httpcodes
 
-OK = httpcodes.OK
-UNAUTHORIZED = httpcodes.UNAUTHORIZED
+BAD_GATEWAY = int(httpcodes.BAD_GATEWAY)
+OK = int(httpcodes.OK)
+SERVICE_UNAVAILABLE = int(httpcodes.SERVICE_UNAVAILABLE)
+UNAUTHORIZED = int(httpcodes.UNAUTHORIZED)
 
 # Additional HTTP Status Codes according to http://tools.ietf.org/html/rfc6585 (for Python 2)
 
@@ -32,7 +34,6 @@ def process_status_code(status_code, reason=None):
             reason = reason if reason is not None else _additional_response_codes[status_code]
         else:
             # change error code for unknown HTTP codes (ex. fake 599 error code)
-            status_code = httpcodes.SERVICE_UNAVAILABLE
-            reason = None
+            status_code = BAD_GATEWAY
 
     return status_code, reason
