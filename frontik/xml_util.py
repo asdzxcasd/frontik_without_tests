@@ -4,6 +4,7 @@ import time
 
 from lxml import etree
 
+from frontik.compat import iteritems
 from frontik.util import any_to_unicode, asciify_url
 
 parser = etree.XMLParser()
@@ -37,16 +38,14 @@ def dict_to_xml(dict_value, element_name):
         element.text = any_to_unicode(dict_value)
         return element
 
-    for k, v in dict_value.items():
+    for k, v in iteritems(dict_value):
         element.append(dict_to_xml(v, k))
+
     return element
 
 
 def xml_to_dict(xml):
     if len(xml) == 0:
-        return xml.text.encode('ascii', 'xmlcharrefreplace') if xml.text is not None else ''
+        return xml.text if xml.text is not None else ''
 
-    dictionary = {}
-    for e in xml:
-        dictionary[e.tag] = xml_to_dict(e)
-    return dictionary
+    return {e.tag: xml_to_dict(e) for e in xml}
