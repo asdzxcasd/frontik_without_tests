@@ -1,10 +1,15 @@
 # coding=utf-8
 
-import itertools
+from collections import defaultdict, deque
+import sys
 
 from lxml import etree
+from lxml.doctestcompare import LXMLOutputChecker
+from tornado.util import raise_exc_info
 
-from frontik.compat import iteritems
+from frontik.compat import unicode_type
+
+XML_checker = LXMLOutputChecker()
 
 
 def _describe_element(elem):
@@ -19,180 +24,202 @@ def _xml_text_compare(t1, t2):
     return (t1 or '').strip() == (t2 or '').strip()
 
 
-def _xml_tags_compare(a, b):
-    # (1): compare tag names
-    res = cmp(a.tag, b.tag)
-    if res != 0:
-        return res
-
-    # (2): compare attributes
-    res = cmp(dict(a.attrib), dict(b.attrib))
-    if res != 0:
-        return res
-
-    # (3): compare children
-    a_children = a.getchildren()
-    b_children = b.getchildren()
-    a_children.sort(_xml_tags_compare)
-    b_children.sort(_xml_tags_compare)
-    for a_child, b_child in itertools.izip_longest(a_children, b_children):
-        if etree.iselement(a_child) and etree.iselement(b_child):
-            child_res = _xml_tags_compare(a_child, b_child)
-        else:
-            child_res = cmp(a_child, b_child)
-        if child_res != 0:
-            res = child_res
-            break
-
-    return res
-
-
-def _xml_compare_tag_attribs_text(xml1, xml2, reporter, compare_xml2_attribs=True):
+def _assert_tag_and_attributes_are_equal(xml1, xml2, can_extend=False):
     if xml1.tag != xml2.tag:
-        reporter('Tags do not match: {tag1} and {tag2} (path: {path})'
-                 .format(tag1=xml1.tag, tag2=xml2.tag, path=_describe_element(xml1)))
-        return False
+        raise AssertionError(u'Tags do not match: {tag1} != {tag2}'.format(
+            tag1=_describe_element(xml1), tag2=_describe_element(xml2)
+        ))
 
-    for attrib, value in iteritems(xml1.attrib):
-        if xml2.attrib.get(attrib) != value:
-            reporter('Attributes do not match: {attr}={v1!r}, {attr}={v2!r} (path: {path})'
-                     .format(attr=attrib, v1=value, v2=xml2.attrib.get(attrib), path=_describe_element(xml1)))
-            return False
+    added_attributes = set(xml2.attrib).difference(xml1.attrib)
+    missing_attributes = set(xml1.attrib).difference(xml2.attrib)
 
-    if compare_xml2_attribs:
-        for attrib in xml2.attrib:
-            if attrib not in xml1.attrib:
-                reporter('xml2 has an attribute xml1 is missing: {attrib} (path: {path})'
-                         .format(attrib=attrib, path=_describe_element(xml2)))
-                return False
+    if missing_attributes:
+        raise AssertionError(u'Second xml misses attributes: {path}/({attributes})'.format(
+            path=_describe_element(xml2), attributes=','.join(missing_attributes)
+        ))
 
-    if not _xml_text_compare(xml1.text, xml2.text):
-        reporter('Text: {t1} != {t2} (path: {path})'
-                 .format(t1=xml1.text.encode('utf-8'), t2=xml2.text.encode('utf-8'), path=_describe_element(xml1)))
-        return False
+    if not can_extend and added_attributes:
+        raise AssertionError(u'Second xml has additional attributes: {path}/({attributes})'.format(
+            path=_describe_element(xml2), attributes=','.join(added_attributes)
+        ))
 
-    if not _xml_text_compare(xml1.tail, xml2.tail):
-        reporter('Tail: {tail1} != {tail2}'.format(
-            tail1=xml1.tail.encode('utf-8'), tail2=xml2.tail.encode('utf-8'), path=_describe_element(xml1)))
-        return False
+    for attrib in xml1.attrib:
+        if not XML_checker.text_compare(xml1.attrib[attrib], xml2.attrib[attrib], False):
+            raise AssertionError(u"Attribute values are not equal: {path}/{attribute}['{v1}' != '{v2}']".format(
+                path=_describe_element(xml1), attribute=attrib, v1=xml1.attrib[attrib], v2=xml2.attrib[attrib]
+            ))
 
-    return True
+    if not XML_checker.text_compare(xml1.text, xml2.text, True):
+        raise AssertionError(u"Tags text differs: {path}['{t1}' != '{t2}']".format(
+            path=_describe_element(xml1), t1=xml1.text, t2=xml2.text
+        ))
 
-
-class _DownstreamReporter(object):
-
-    def __init__(self):
-        self.last_error = None
-
-    def __call__(self, *args, **kwargs):
-        self.last_error = args[0]
+    if not XML_checker.text_compare(xml1.tail, xml2.tail, True):
+        raise AssertionError(u"Tags tail differs: {path}['{t1}' != '{t2}']".format(
+            path=_describe_element(xml1), t1=xml1.tail, t2=xml2.tail
+        ))
 
 
-def _xml_compare(xml1, xml2, check_tags_order=False, reporter=lambda x: None):
-    """Compare two etree.Element objects.
+def _assert_xml_docs_are_equal(xml1, xml2, check_tags_order=False):
+    _assert_tag_and_attributes_are_equal(xml1, xml2)
 
-    Based on https://bitbucket.org/ianb/formencode/src/tip/formencode/doctest_xml_compare.py#cl-70
-    """
-    if not _xml_compare_tag_attribs_text(xml1, xml2, reporter=reporter):
-        return False
+    children1 = list(xml1)
+    children2 = list(xml2)
 
-    children1 = xml1.getchildren()
-    children2 = xml2.getchildren()
     if len(children1) != len(children2):
-        reporter('Children length differs, {len1} != {len2} (path: {path})'
-                 .format(len1=len(children1), len2=len(children2), path=_describe_element(xml1)))
-        return False
+        raise AssertionError(u'Children are not equal: {path}[{len1} children != {len2} children]'.format(
+            path=_describe_element(xml1), len1=len(children1), len2=len(children2)
+        ))
 
-    if not check_tags_order:
-        children1.sort(_xml_tags_compare)
-        children2.sort(_xml_tags_compare)
-
-    i = 0
-    for c1, c2 in zip(children1, children2):
-        i += 1
-        if not _xml_compare(c1, c2, check_tags_order, reporter):
-            reporter('Children not matched (path: {path})'
-                     .format(n=i, tag1=c1.tag, tag2=c2.tag, path=_describe_element(xml1)))
-            return False
-
-    return True
-
-
-def _xml_check_compatibility(old_xml, new_xml, reporter=lambda x: None):
-    """Check compatibility of two xml documents (new_xml is an extension of old_xml).
-
-    new_xml >= old_xml:
-        * new_xml should contains all attribs and properties from old_xml
-        * new_xml may have any extra attribs
-        * new_xml may have any extra properties
-    """
-    pre_cmp = _xml_compare_tag_attribs_text(old_xml, new_xml, reporter=reporter, compare_xml2_attribs=False)
-    if not pre_cmp:
-        return False
-
-    old_children = old_xml.getchildren()
-    new_children = new_xml.getchildren()
-
-    if len(old_children) == 0:
-        return True
-
-    elif len(new_children) < len(old_children):
-        reporter('Children length differs, {len1} < {len2} (path: {path})'
-                 .format(len1=len(old_children), len2=len(new_children), path=_describe_element(old_xml)))
-        return False
+    if check_tags_order:
+        for c1, c2 in zip(children1, children2):
+            _assert_xml_docs_are_equal(c1, c2)
 
     else:
-        new_children_index = {}
-        for child in new_children:
-            tag = child.tag
-            if tag not in new_children_index:
-                new_children_index[tag] = []
-            new_children_index[tag].append(child)
-        for tag in new_children_index:
-            new_children_index[tag].sort(_xml_tags_compare)
+        children1 = set(children1)
+        children2 = set(children2)
 
-        old_children.sort(_xml_tags_compare)
-        for child in old_children:
-            tag = child.tag
-            if tag not in new_children_index or len(new_children_index[tag]) == 0:
-                reporter('Tag {tag} not exist in new xml (path: {path})'
-                         .format(tag=tag, path=_describe_element(old_xml)))
-                return False
+        for c1 in children1:
+            c1_match = None
 
-            any_matched = False
-            downstream_reporter = _DownstreamReporter()
-            for match_child in new_children_index[tag]:
-                is_compatible = _xml_check_compatibility(child, match_child, downstream_reporter)
-                if is_compatible:
-                    any_matched = True
-                    new_children_index[tag].remove(match_child)
+            for c2 in children2:
+                try:
+                    _assert_xml_docs_are_equal(c1, c2, check_tags_order)
+                except AssertionError:
+                    pass
+                else:
+                    c1_match = c2
                     break
-            if not any_matched:
-                reporter(downstream_reporter.last_error)
-                return False
+
+            if c1_match is None:
+                raise AssertionError(u'No equal child found in second xml: {path}'.format(path=_describe_element(c1)))
+
+            children2.remove(c1_match)
+
+
+def _find_max_matching(graph):
+    left = list(graph)
+    pair = defaultdict(lambda: None)
+    dist = defaultdict(lambda: None)
+    q = deque()
+
+    full_graph = graph.copy()
+    for v in left:
+        for n in graph[v]:
+            full_graph[n].add(v)
+
+    def bfs():
+        for v in left:
+            if pair[v] is None:
+                dist[v] = 0
+                q.append(v)
+            else:
+                dist[v] = None
+
+        dist[None] = None
+
+        while q:
+            v = q.popleft()
+            if v is not None:
+                for u in full_graph[v]:
+                    if dist[pair[u]] is None:
+                        dist[pair[u]] = dist[v] + 1
+                        q.append(pair[u])
+
+        return dist[None] is not None
+
+    def dfs(v):
+        if v is not None:
+            for u in full_graph[v]:
+                if dist[pair[u]] == dist[v] + 1 and dfs(pair[u]):
+                    pair[u] = v
+                    pair[v] = u
+                    return True
+
+            dist[v] = None
+            return False
+
         return True
+
+    matching = 0
+
+    while bfs():
+        for v in left:
+            if pair[v] is None and dfs(v):
+                matching += 1
+                if matching == len(graph):
+                    break
+
+    return {v: pair[v] for v in pair if pair[v] is not None}
+
+
+def _assert_xml_docs_are_compatible(xml1, xml2):
+    _assert_tag_and_attributes_are_equal(xml1, xml2, can_extend=True)
+
+    children1 = list(xml1)
+    children2 = list(xml2)
+
+    if not children1:
+        return
+
+    elif len(children2) < len(children1):
+        raise AssertionError(u'Second xml {path} contains less children ({len2} < {len1})'.format(
+            path=_describe_element(xml1), len1=len(children1), len2=len(children2)
+        ))
+
+    else:
+        compatibility_bipartite_graph = defaultdict(set)
+
+        for c1 in children1:
+            for c2 in children2:
+                try:
+                    _assert_xml_docs_are_compatible(c1, c2)
+                except AssertionError:
+                    pass
+                else:
+                    compatibility_bipartite_graph[c1].add(c2)
+
+            if not compatibility_bipartite_graph[c1]:
+                raise AssertionError(
+                    u'Second xml has no compatible child for {path}'.format(path=_describe_element(c1))
+                )
+
+        max_matching = _find_max_matching(compatibility_bipartite_graph)
+        any_missing = next((c for c in children1 if c not in max_matching), None)
+
+        if any_missing is not None:
+            raise AssertionError(
+                u'Second xml has no compatible child for {path}'.format(path=_describe_element(any_missing))
+            )
 
 
 class XmlTestCaseMixin(object):
     """Mixin for L{unittest.TestCase}."""
 
     def _assert_xml_compare(self, cmp_func, xml1, xml2, msg, **kwargs):
-        if msg is None:
-            msg = 'XML documents are not equal'
         if not isinstance(xml1, etree._Element):
             xml1 = etree.fromstring(xml1)
+
         if not isinstance(xml2, etree._Element):
             xml2 = etree.fromstring(xml2)
 
-        def _fail_reporter(err_message):
-            self.fail('{0}: {1}'.format(msg, err_message))
+        try:
+            cmp_func(xml1, xml2, **kwargs)
+        except AssertionError as e:
+            raise_exc_info((AssertionError, AssertionError(u'{} — {}'.format(msg, unicode_type(e))), sys.exc_info()[2]))
 
-        cmp_func(xml1, xml2, reporter=_fail_reporter, **kwargs)
+    def assertXmlEqual(self, first, second, check_tags_order=False, msg=None):
+        """Assert that two xml documents are equal (the order of attributes is always ignored)."""
+        if msg is None:
+            msg = u'XML documents are not equal'
 
-    def assertXmlEqual(self, expected, real, msg=None, check_tags_order=False):
-        """Assert that two xml documents are equal (the order of elements and attributes is ignored)."""
-        self._assert_xml_compare(_xml_compare, expected, real, msg, check_tags_order=check_tags_order)
+        self._assert_xml_compare(_assert_xml_docs_are_equal, first, second, msg, check_tags_order=check_tags_order)
 
-    def assertXmlCompatible(self, old, new, msg=None):
-        """Assert that one xml document is an extension of another."""
-        self._assert_xml_compare(_xml_check_compatibility, old, new, msg)
+    def assertXmlCompatible(self, first, second, msg=None):
+        """Assert that second xml document is an extension of the first
+        (must contain all tags and attributes from the first xml and any number of extra tags and attributes).
+        """
+        if msg is None:
+            msg = u'XML documents are not compatible'
+
+        self._assert_xml_compare(_assert_xml_docs_are_compatible, first, second, msg)
