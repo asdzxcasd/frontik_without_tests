@@ -1,6 +1,5 @@
 # coding=utf-8
 
-from collections import namedtuple
 from functools import partial
 import re
 import time
@@ -52,122 +51,127 @@ class HttpClient(object):
                 callback=None, error_callback=None, follow_redirects=True, labels=None,
                 add_to_finish_group=True, parse_response=True, parse_on_error=False):
 
-        future = Future()
         request = frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout, follow_redirects)
         request._frontik_labels = labels
 
-        self.fetch(
+        return self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            callback=callback, error_callback=error_callback,
+            parse_response=parse_response, parse_on_error=parse_on_error,
             add_to_finish_group=add_to_finish_group
         )
-
-        return future
 
     def head_url(self, url, data=None, headers=None, connect_timeout=None, request_timeout=None,
                  callback=None, error_callback=None, follow_redirects=True, labels=None,
                  add_to_finish_group=True):
 
-        future = Future()
         request = frontik.util.make_head_request(url, data, headers, connect_timeout, request_timeout, follow_redirects)
         request._frontik_labels = labels
 
-        self.fetch(
+        return self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, False, False),
+            callback=callback, error_callback=error_callback,
+            parse_response=False, parse_on_error=False,
             add_to_finish_group=add_to_finish_group
         )
-
-        return future
 
     def post_url(self, url, data='', headers=None, files=None, connect_timeout=None, request_timeout=None,
                  callback=None, error_callback=None, follow_redirects=True, content_type=None, labels=None,
                  add_to_finish_group=True, parse_response=True, parse_on_error=False):
 
-        future = Future()
         request = frontik.util.make_post_request(
             url, data, headers, files, content_type, connect_timeout, request_timeout, follow_redirects
         )
         request._frontik_labels = labels
 
-        self.fetch(
+        return self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            callback=callback, error_callback=error_callback,
+            parse_response=parse_response, parse_on_error=parse_on_error,
             add_to_finish_group=add_to_finish_group
         )
-
-        return future
 
     def put_url(self, url, data='', headers=None, connect_timeout=None, request_timeout=None,
                 callback=None, error_callback=None, content_type=None, labels=None,
                 add_to_finish_group=True, parse_response=True, parse_on_error=False):
 
-        future = Future()
         request = frontik.util.make_put_request(url, data, headers, content_type, connect_timeout, request_timeout)
         request._frontik_labels = labels
 
-        self.fetch(
+        return self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            callback=callback, error_callback=error_callback,
+            parse_response=parse_response, parse_on_error=parse_on_error,
             add_to_finish_group=add_to_finish_group
         )
-
-        return future
 
     def delete_url(self, url, data=None, headers=None, connect_timeout=None, request_timeout=None,
                    callback=None, error_callback=None, content_type=None, labels=None,
                    add_to_finish_group=True, parse_response=True, parse_on_error=False):
 
-        future = Future()
         request = frontik.util.make_delete_request(url, data, headers, content_type, connect_timeout, request_timeout)
         request._frontik_labels = labels
 
-        self.fetch(
+        return self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            callback=callback, error_callback=error_callback,
+            parse_response=parse_response, parse_on_error=parse_on_error,
             add_to_finish_group=add_to_finish_group
         )
 
+    def fetch(self, request, callback=None, error_callback=None,
+              parse_response=True, parse_on_error=False,
+              add_to_finish_group=True):
+        """ Tornado HTTP client compatible method """
+        future = Future()
+
+        if self.handler._finished:
+            self.handler.log.warning(
+                'attempted to make http request to %s when page is finished, ignoring', request.url
+            )
+            return future
+
+        if self.handler._prepared and self.handler.debug.debug_mode.pass_debug:
+            request.headers[PageHandlerDebug.DEBUG_HEADER_NAME] = True
+            request.url = frontik.util.make_url(request.url, hh_debug_param=int(time.time()))
+
+            for header_name in ('Authorization', DEBUG_AUTH_HEADER_NAME):
+                authorization = self.handler.request.headers.get(header_name)
+                if authorization is not None:
+                    request.headers[header_name] = authorization
+
+        request.headers['X-Request-Id'] = self.handler.request_id
+
+        if request.connect_timeout is None:
+            request.connect_timeout = options.http_client_default_connect_timeout
+        if request.request_timeout is None:
+            request.request_timeout = options.http_client_default_request_timeout
+
+        request.connect_timeout *= options.timeout_multiplier
+        request.request_timeout *= options.timeout_multiplier
+
+        if options.http_proxy_host is not None:
+            request.proxy_host = options.http_proxy_host
+            request.proxy_port = options.http_proxy_port
+
+        def request_callback(response):
+            response = self._unwrap_debug_and_log_response(request, response)
+            request_result = self._parse_response(response, parse_response, parse_on_error)
+
+            if callable(error_callback) and (response.error or request_result.error is not None):
+                error_callback(request_result.data, response)
+            elif callable(callback):
+                callback(request_result.data, response)
+
+            future.set_result(request_result)
+
+        if add_to_finish_group:
+            request_callback = self.handler.finish_group.add(self.handler.check_finished(request_callback))
+
+        self.http_client_impl.fetch(self.modify_http_request_hook(request), callback=request_callback)
         return future
 
-    def fetch(self, request, callback, add_to_finish_group=True):
-        """ Tornado HTTP client compatible method """
-        if not self.handler._finished:
-            if self.handler._prepared and self.handler.debug.debug_mode.pass_debug:
-                request.headers[PageHandlerDebug.DEBUG_HEADER_NAME] = True
-                request.url = frontik.util.make_url(request.url, hh_debug_param=int(time.time()))
-
-                for header_name in ('Authorization', DEBUG_AUTH_HEADER_NAME):
-                    authorization = self.handler.request.headers.get(header_name)
-                    if authorization is not None:
-                        request.headers[header_name] = authorization
-
-            request.headers['X-Request-Id'] = self.handler.request_id
-
-            if request.connect_timeout is None:
-                request.connect_timeout = options.http_client_default_connect_timeout
-            if request.request_timeout is None:
-                request.request_timeout = options.http_client_default_request_timeout
-
-            request.connect_timeout *= options.timeout_multiplier
-            request.request_timeout *= options.timeout_multiplier
-
-            if add_to_finish_group:
-                req_callback = self.handler.finish_group.add(
-                    self.handler.check_finished(self._log_response, request, callback)
-                )
-            else:
-                req_callback = partial(self._log_response, request, callback)
-
-            if options.http_proxy_host is not None:
-                request.proxy_host = options.http_proxy_host
-                request.proxy_port = options.http_proxy_port
-
-            return self.http_client_impl.fetch(self.modify_http_request_hook(request), req_callback)
-
-        self.handler.log.warning('attempted to make http request to %s when page is finished, ignoring', request.url)
-
-    def _log_response(self, request, callback, response):
+    def _unwrap_debug_and_log_response(self, request, response):
         try:
             debug_extra = {}
             if response.headers.get(PageHandlerDebug.DEBUG_HEADER_NAME):
@@ -192,73 +196,54 @@ class HttpClient(object):
         except Exception:
             self.handler.log.exception('Cannot log response info')
 
-        if callable(callback):
-            callback(response)
+        return response
 
-    def _parse_response(self, future, callback, error_callback, parse_response, parse_on_error, response):
-        data = None
-        result = RequestResult()
+    def _parse_response(self, response, parse_response, parse_on_error):
+        if response.error and not parse_on_error:
+            log_func = self.handler.log.error if response.code >= 500 else self.handler.log.warning
+            log_func('{code} failed {url} ({reason!s})'.format(
+                code=response.code, url=response.effective_url, reason=response.error)
+            )
 
-        try:
-            if response.error and not parse_on_error:
-                self._set_response_error(response)
-            elif not parse_response:
-                data = response.body
-            elif response.code != 204:
-                content_type = response.headers.get('Content-Type', '')
-                for k, v in iteritems(DEFAULT_REQUEST_TYPES):
-                    if k.search(content_type):
-                        data = v(response, logger=self.handler.log)
-                        break
-        except FailedRequestException as ex:
-            result.set_exception(ex)
+            return RequestResult.from_error(reason=str(response.error), code=response.code)
 
-        if callable(error_callback) and (response.error or result.exception is not None):
-            error_callback(data, response)
-        elif callable(callback):
-            callback(data, response)
+        elif not parse_response:
+            return RequestResult.from_parsed_response(response.body, response)
 
-        result.set(data, response)
-        future.set_result(result)
+        elif response.code != 204:
+            content_type = response.headers.get('Content-Type', '')
+            for k, v in iteritems(DEFAULT_REQUEST_TYPES):
+                if k.search(content_type):
+                    return v(response, logger=self.handler.log)
 
-    def _set_response_error(self, response):
-        log_func = self.handler.log.error if response.code >= 500 else self.handler.log.warning
-        log_func('{code} failed {url} ({reason!s})'.format(
-            code=response.code, url=response.effective_url, reason=response.error)
-        )
-
-        raise FailedRequestException(reason=str(response.error), code=response.code)
-
-
-class FailedRequestException(Exception):
-    def __init__(self, **kwargs):
-        self.attrs = kwargs
+        return RequestResult.from_parsed_response(None, response)
 
 
 class RequestResult(object):
-    __slots__ = ('data', 'response', 'exception')
-
-    ResponseData = namedtuple('ResponseData', ('data', 'response'))
+    __slots__ = ('data', 'response', 'error')
 
     def __init__(self):
         self.data = None
         self.response = None
-        self.exception = None
+        self.error = None
 
-    def set(self, data, response):
-        self.data = data
-        self.response = response
+    @staticmethod
+    def from_parsed_response(data, response):
+        request_result = RequestResult()
+        request_result.data = data
+        request_result.response = response
+        return request_result
 
-    def get(self):
-        return RequestResult.ResponseData(self.data, self.response)
-
-    def set_exception(self, exception):
-        self.exception = exception
+    @staticmethod
+    def from_error(**kwargs):
+        request_result = RequestResult()
+        request_result.error = kwargs
+        return request_result
 
 
 def _parse_response(response, logger=request_logger, parser=None, response_type=None):
     try:
-        return parser(response.body)
+        return RequestResult.from_parsed_response(parser(response.body), response)
     except:
         _preview_len = 100
 
@@ -270,7 +255,7 @@ def _parse_response(response, logger=request_logger, parser=None, response_type=
         logger.exception('failed to parse {0} response from {1}, bad data: "{2}"'.format(
             response_type, response.effective_url, body_preview))
 
-        raise FailedRequestException(url=response.effective_url, reason='invalid {0}'.format(response_type))
+        return RequestResult.from_error(url=response.effective_url, reason='invalid {}'.format(response_type))
 
 
 _xml_parser = etree.XMLParser(strip_cdata=False)
@@ -285,5 +270,7 @@ _parse_response_json = partial(_parse_response,
 DEFAULT_REQUEST_TYPES = {
     re.compile('.*xml.?'): _parse_response_xml,
     re.compile('.*json.?'): _parse_response_json,
-    re.compile('.*text/plain.?'): (lambda response, logger: response.body),
+    re.compile('.*text/plain.?'): (
+        lambda response, logger: RequestResult.from_parsed_response(response.body, response)
+    ),
 }

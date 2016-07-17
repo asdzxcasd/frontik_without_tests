@@ -51,8 +51,8 @@ class Doc(object):
         self.data = []
 
     @staticmethod
-    def get_error_node(exception):
-        return etree.Element('error', **{k: str(v) for k, v in iteritems(exception.attrs)})
+    def get_error_node(error):
+        return etree.Element('error', **{k: str(v) for k, v in iteritems(error)})
 
     def to_etree_element(self):
         res = self.root_node.to_etree_element() if isinstance(self.root_node, Doc) else self.root_node
@@ -67,8 +67,8 @@ class Doc(object):
                 yield chunk.to_etree_element()
 
             elif isinstance(chunk, RequestResult):
-                if chunk.exception is not None:
-                    yield self.get_error_node(chunk.exception)
+                if chunk.error is not None:
+                    yield self.get_error_node(chunk.error)
                 else:
                     for i in chunk_to_element(chunk.data):
                         yield i

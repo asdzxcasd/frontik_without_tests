@@ -1,6 +1,5 @@
 # coding=utf-8
 
-import datetime
 import json
 import logging
 
@@ -26,8 +25,8 @@ def _encode_value(v):
         return _encode_iterable(v)
 
     elif isinstance(v, RequestResult):
-        if v.exception is not None:
-            return JsonBuilder.get_error_node(v.exception)
+        if v.error is not None:
+            return JsonBuilder.get_error_node(v.error)
         return _encode_value(v.data)
 
     elif isinstance(v, Future):
@@ -81,9 +80,9 @@ class JsonBuilder(object):
         self._data = []
 
     @staticmethod
-    def get_error_node(exception):
+    def get_error_node(error):
         return {
-            'error': {k: v for k, v in iteritems(exception.attrs)}
+            'error': {k: v for k, v in iteritems(error)}
         }
 
     def to_dict(self):
