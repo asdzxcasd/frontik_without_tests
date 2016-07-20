@@ -1,3 +1,9 @@
+frontik (2.25.29) unstable; urgency=low
+
+  * HH-61102 optimize JsonBuilder.to_string()
+
+ -- Automated Build <an.sumin@hh.ru>  Wed, 20 Jul 2016 23:47:45 +0300
+
 frontik (2.25.28) unstable; urgency=low
 
   * HH-60993 add fallback for apps with app_root_url
