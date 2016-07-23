@@ -69,7 +69,7 @@ class StatusHandler(tornado.web.RequestHandler):
         result = {
             'uptime': uptime_value,
             'workers': {
-                'total': tornado.options.options.max_http_clients,
+                'total': options.max_http_clients,
                 'free':  len(self.application.curl_http_client._free_list)
             }
         }
