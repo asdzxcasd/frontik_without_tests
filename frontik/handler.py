@@ -52,11 +52,8 @@ class BaseHandler(tornado.web.RequestHandler):
     def __init__(self, application, request, logger, request_id=None, **kwargs):
         self._prepared = False
 
-        if request_id is None:
-            raise Exception('no request_id for {} provided'.format(self.__class__))
-
         self.name = self.__class__.__name__
-        self.request_id = request_id
+        self.request_id = logger.request_id
         self.config = application.config
 
         self.log = logger
