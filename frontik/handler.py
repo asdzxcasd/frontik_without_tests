@@ -390,7 +390,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 )
 
                 if self.debug.debug_mode.inherited:
-                    self.set_header(PageHandlerDebug.DEBUG_HEADER_NAME, True)
+                    self.set_header(PageHandlerDebug.DEBUG_HEADER_NAME, 'true')
 
                 self.set_header('Content-disposition', '')
                 self.set_header('Content-Length', str(len(res)))
