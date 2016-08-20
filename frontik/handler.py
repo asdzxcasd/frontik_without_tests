@@ -378,27 +378,23 @@ class BaseHandler(tornado.web.RequestHandler):
 
         if self._prepared and self.debug.debug_mode.enabled:
             try:
-                self._response_size = sum(map(len, self._write_buffer))
-                original_headers = {'Content-Length': str(self._response_size)}
-                response_headers = dict(self._headers, **original_headers)
-
                 original_response = {
                     'buffer': base64.b64encode(b''.join(self._write_buffer)),
-                    'headers': response_headers,
+                    'headers': self._headers,
                     'code': self._status_code
                 }
 
                 res = self.debug.get_debug_page(
-                    self._status_code, response_headers, original_response, self.log.get_current_total()
+                    self._status_code, self._headers, original_response, self.log.get_current_total()
                 )
+
+                self.clear()
+                self.set_header('Content-Length', str(len(res)))
 
                 if self.debug.debug_mode.inherited:
                     self.set_header(PageHandlerDebug.DEBUG_HEADER_NAME, True)
 
-                self.set_header('Content-disposition', '')
-                self.set_header('Content-Length', str(len(res)))
                 self._write_buffer = [res]
-                self._status_code = 200
 
             except Exception:
                 self.log.exception('cannot write debug info')

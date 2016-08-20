@@ -136,10 +136,7 @@ def response_from_debug(request, response):
         original_response.getparent().remove(original_response)
 
         original_buffer = base64.b64decode(response_info['buffer'])
-
-        headers = dict(response.headers)
-        if response_info['headers']:
-            headers.update(response_info['headers'])
+        headers = response_info.get('headers', {})
 
         fake_response = HTTPResponse(
             request,
@@ -405,9 +402,6 @@ class PageHandlerDebug(object):
         ))
 
         debug_log_data.append(E.response(_headers_to_xml(response_headers)))
-
-        if getattr(self.handler, "_response_size", None) is not None:
-            debug_log_data.set("response-size", str(self.handler._response_size))
 
         if original_response is not None:
             debug_log_data.append(frontik.xml_util.dict_to_xml(original_response, 'original-response'))
