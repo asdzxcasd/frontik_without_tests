@@ -50,7 +50,7 @@ def response_to_xml(response):
             mode = 'xml'
             body = _pretty_print_xml(etree.fromstring(response.body))
         elif 'json' in content_type:
-            mode = 'javascript'
+            mode = 'json'
             body = _pretty_print_json(json.loads(response.body))
         else:
             if 'javascript' in content_type:

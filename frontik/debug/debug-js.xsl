@@ -87,7 +87,7 @@
                                              .replace(/</g, '&lt;');
                 });
 
-                var json = document.getElementsByClassName('javascript highlighted-code');
+                var json = document.getElementsByClassName('json highlighted-code');
                 Array.prototype.forEach.call(json, function(el) {
                     el.innerHTML = vkbeautify.json(el.textContent).replace(/</g, '&lt;');
                 });

@@ -128,10 +128,7 @@
             <!-- This allows debug page to work inside dev tools request preview, useful for ajax requests debugging -->
             <label for="details_{generate-id(.)}" onclick="toggle(this.parentNode)" class="entry__head entry__switcher">
                 <span class="entry__head__expandtext">
-                    <span class="time">
-                        <xsl:value-of select="format-number(@duration, '#0.#')"/>
-                        <xsl:text>ms </xsl:text>
-                    </span>
+                    <xsl:apply-templates select="@duration"/>
                     <xsl:apply-templates select="labels/label"/>
                     <xsl:text> at </xsl:text>
                     <xsl:value-of select="@pathname" />
@@ -153,6 +150,13 @@
             </div>
         </div>
         <xsl:apply-templates select="exception"/>
+    </xsl:template>
+
+    <xsl:template match="entry/@duration">
+        <span class="time">
+            <xsl:value-of select="format-number(., '#0.#')"/>
+            <xsl:text>ms</xsl:text>
+        </span>
     </xsl:template>
 
     <xsl:template match="entry[stage]">
