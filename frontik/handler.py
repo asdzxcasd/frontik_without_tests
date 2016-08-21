@@ -49,14 +49,14 @@ class BaseHandler(tornado.web.RequestHandler):
     preprocessors = ()
 
     # to restore tornado.web.RequestHandler compatibility
-    def __init__(self, application, request, logger, request_id=None, **kwargs):
+    def __init__(self, application, request, logger, **kwargs):
         self._prepared = False
 
-        if request_id is None:
+        if logger.request_id is None:
             raise Exception('no request_id for {} provided'.format(self.__class__))
 
         self.name = self.__class__.__name__
-        self.request_id = request_id
+        self.request_id = logger.request_id
         self.config = application.config
 
         self.log = logger
@@ -467,8 +467,8 @@ class BaseHandler(tornado.web.RequestHandler):
 
 
 class PageHandler(BaseHandler):
-    def __init__(self, application, request, logger, request_id=None, **kwargs):
-        super(PageHandler, self).__init__(application, request, logger, request_id, **kwargs)
+    def __init__(self, application, request, logger, **kwargs):
+        super(PageHandler, self).__init__(application, request, logger, **kwargs)
 
     def group(self, futures, callback=None, name=None):
         return self._http_client.group(futures, callback, name)

@@ -11,6 +11,7 @@ from tornado.concurrent import Future
 import tornado.curl_httpclient
 import tornado.ioloop
 from tornado.options import options
+from tornado.routing import HandlerMatch
 import tornado.web
 
 from frontik.compat import iteritems
@@ -81,56 +82,74 @@ def extend_request_arguments(request, match):
             request.arguments.setdefault(name, []).append(value)
 
 
+class NotFoundRouter(object):
+    def __init__(self, app):
+        self.app = app
+        self.handler_class = self.app.application_404_handler()
+
+    def find_handler(self, request):
+        request_id = request.headers.get('X-Request-Id', FrontikApplication.next_request_id())
+        logger = RequestLogger(request, request_id)
+        return HandlerMatch(self.handler_class(self.app, request, logger=logger), [], {})
+
+
 class FileMappingDispatcher(object):
-    def __init__(self, module, handler_404=None):
-        self.name = module.__name__
-        self.handler_404 = handler_404
+    def __init__(self, app, *args, **kwargs):
+        self.app = app
+        self.pages_module = '{}.pages'.format(self.app.app)
+
         app_logger.info('initialized %r', self)
 
-    def __call__(self, application, request, logger, **kwargs):
+    def find_handler(self, request):
+        request_id = request.headers.get('X-Request-Id', FrontikApplication.next_request_id())
+        logger = RequestLogger(request, request_id)
+
         url_parts = request.path.strip('/').split('/')
 
         if any('.' in part for part in url_parts):
             logger.info('url contains "." character, using 404 page')
-            return self.handle_404(application, request, logger, **kwargs)
+            return None
 
         page_name = '.'.join(filter(None, url_parts))
-        page_module_name = '.'.join(filter(None, (self.name, page_name)))
+        page_module_name = '.'.join(filter(None, (self.pages_module, page_name)))
         logger.debug('page module: %s', page_module_name)
 
         try:
             page_module = importlib.import_module(page_module_name)
             logger.debug('using %s from %s', page_module_name, page_module.__file__)
         except ImportError:
-            logger.warning('%s module not found', (self.name, page_module_name))
-            return self.handle_404(application, request, logger, **kwargs)
+            logger.warning('%s module not found', (self.pages_module, page_module_name))
+            return None
         except:
             logger.exception('error while importing %s module', page_module_name)
-            return ErrorHandler(application, request, logger, status_code=500, **kwargs)
+            return HandlerMatch(
+                handler=ErrorHandler(self.app, request, logger=logger, status_code=500),
+                args=[], kwargs={}
+            )
 
         if not hasattr(page_module, 'Page'):
             logger.error('%s.Page class not found', page_module_name)
-            return self.handle_404(application, request, logger, **kwargs)
+            return None
 
-        return page_module.Page(application, request, logger, **kwargs)
+        return HandlerMatch(
+            handler=page_module.Page(self.app, request, logger=logger), args=[], kwargs={}
+        )
 
     def __repr__(self):
-        return '{}.{}(<{}, handler_404={}>)'.format(__package__, self.__class__.__name__, self.name, self.handler_404)
-
-    def handle_404(self, application, request, logger, **kwargs):
-        if self.handler_404 is not None:
-            return self.handler_404(application, request, logger, **kwargs)
-        return ErrorHandler(application, request, logger, status_code=404, **kwargs)
+        return '{}.{}(<{}>)'.format(__package__, self.__class__.__name__, self.app.app)
 
 
 class RegexpDispatcher(object):
-    def __init__(self, app_list, name='RegexpDispatcher'):
-        self.name = name
-        self.handlers = [(re.compile(pattern), handler) for pattern, handler in app_list]
+    def __init__(self, app):
+        self.app = app
+        self.handlers = [(re.compile(pattern), handler) for pattern, handler in self.app.application_urls()]
 
         app_logger.info('initialized %r', self)
 
-    def __call__(self, application, request, logger, **kwargs):
+    def find_handler(self, request):
+        request_id = request.headers.get('X-Request-Id', FrontikApplication.next_request_id())
+        logger = RequestLogger(request, request_id)
+
         logger.info('requested url: %s', request.uri)
 
         for pattern, handler in self.handlers:
@@ -138,26 +157,13 @@ class RegexpDispatcher(object):
             if match:
                 logger.debug('using %r', handler)
                 extend_request_arguments(request, match)
-                try:
-                    return handler(application, request, logger, **kwargs)
-                except tornado.web.HTTPError as e:
-                    logger.exception('tornado error: %s in %r', e, handler)
-                    return ErrorHandler(application, request, logger, status_code=e.status_code, **kwargs)
-                except Exception as e:
-                    logger.exception('error handling request: %s in %r', e, handler)
-                    return ErrorHandler(application, request, logger, status_code=500, **kwargs)
 
-        logger.error('match for request url "%s" not found', request.uri)
-        return ErrorHandler(application, request, logger, status_code=404, **kwargs)
+                return HandlerMatch(
+                    handler=handler(self.app, request, logger=logger), args=[], kwargs={}
+                )
 
     def __repr__(self):
         return '{}.{}(<{} routes>)'.format(__package__, self.__class__.__name__, len(self.handlers))
-
-
-def app_dispatcher(tornado_app, request, **kwargs):
-    request_id = request.headers.get('X-Request-Id', FrontikApplication.next_request_id())
-    request_logger = RequestLogger(request, request_id)
-    return tornado_app.dispatcher(tornado_app, request, request_logger, request_id=request_id, **kwargs)
 
 
 class FrontikApplication(tornado.web.Application):
@@ -167,36 +173,42 @@ class FrontikApplication(tornado.web.Application):
         pass
 
     def __init__(self, **settings):
-        tornado_settings = settings.get('tornado_settings')
-
-        if tornado_settings is None:
-            tornado_settings = {}
-
         self.start_time = time.time()
 
-        super(FrontikApplication, self).__init__([
-            (r'/version/?', VersionHandler),
-            (r'/status/?', StatusHandler),
-            (r'.*', app_dispatcher),
-        ], **tornado_settings)
+        tornado_settings = settings.get('tornado_settings')
+        if tornado_settings is None:
+            tornado_settings = {}
 
         self.app_settings = settings
         self.config = self.application_config()
         self.app = settings.get('app')
+
+        super(FrontikApplication, self).__init__([
+            (r'/version/?', VersionHandler),
+            (r'/status/?', StatusHandler),
+        ], **tornado_settings)
+
+        if self.application_urls():
+            self.add_router(RegexpDispatcher(self))
+
+        self.add_router(FileMappingDispatcher(self))
+
+        if self.application_404_handler() is not None:
+            self.add_router(NotFoundRouter(self))
+
         self.xml = frontik.producers.xml_producer.ApplicationXMLGlobals(self.config)
         self.json = frontik.producers.json_producer.ApplicationJsonGlobals(self.config)
-        self.curl_http_client = tornado.curl_httpclient.CurlAsyncHTTPClient(
-            max_clients=tornado.options.options.max_http_clients)
-        self.dispatcher = RegexpDispatcher(self.application_urls(), self.app)
+        self.curl_http_client = tornado.curl_httpclient.CurlAsyncHTTPClient(max_clients=options.max_http_clients)
         self.loggers_initializers = frontik.loggers.bootstrap_app_loggers(self)
 
     def application_urls(self):
-        return [
-            ('', FileMappingDispatcher(importlib.import_module('{}.pages'.format(self.app))))
-        ]
+        return []
 
     def application_config(self):
         return FrontikApplication.DefaultConfig()
+
+    def application_404_handler(self):
+        return None
 
     def application_version_xml(self):
         version = etree.Element('version')

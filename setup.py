@@ -42,7 +42,7 @@ setup(
         'test': TestHook
     },
     packages=[
-        'frontik', 'frontik/loggers', 'frontik/producers', 'frontik/server', 'frontik/testing', 'frontik/testing/pages'
+        'frontik', 'frontik/loggers', 'frontik/producers', 'frontik/server', 'frontik/testing'
     ],
     scripts=['scripts/frontik'],
     package_data={
@@ -64,7 +64,7 @@ setup(
         'lxml-asserts',
     ],
     dependency_links=[
-        'https://github.com/hhru/tornado/archive/master.zip',
+        'https://github.com/hhru/tornado/archive/routing.zip',
     ],
     extras_require={
         'futures': ['futures'],
