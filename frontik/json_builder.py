@@ -79,6 +79,10 @@ class JsonBuilder(object):
     def clear(self):
         self._data = []
 
+    def replace(self, *args, **kwargs):
+        self.clear()
+        self.put(*args, **kwargs)
+
     @staticmethod
     def get_error_node(exception):
         return {

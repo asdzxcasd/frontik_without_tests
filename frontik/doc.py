@@ -50,6 +50,10 @@ class Doc(object):
     def clear(self):
         self.data = []
 
+    def replace(self, *args, **kwargs):
+        self.clear()
+        self.put(*args, **kwargs)
+
     @staticmethod
     def get_error_node(exception):
         return etree.Element('error', **{k: str(v) for k, v in iteritems(exception.attrs)})

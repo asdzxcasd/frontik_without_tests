@@ -44,6 +44,10 @@ class HTTPError(tornado.web.HTTPError):
         self.headers = headers
 
 
+class HTTPErrorWithContent(HTTPError):
+    pass
+
+
 class BaseHandler(tornado.web.RequestHandler):
 
     preprocessors = ()
@@ -88,6 +92,7 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def prepare(self):
         self.active_limit = frontik.handler_active_limit.PageHandlerActiveLimit(self)
+        self.finish_group = AsyncGroup(self.check_finished(self._finish_page_cb), name='finish', logger=self.log)
         self.debug = PageHandlerDebug(self)
 
         self.json_producer = frontik.producers.json_producer.JsonProducer(
@@ -97,7 +102,6 @@ class BaseHandler(tornado.web.RequestHandler):
         self.xml_producer = frontik.producers.xml_producer.XmlProducer(self, self.application.xml)
         self.xml = self.xml_producer  # deprecated synonym
         self.doc = self.xml_producer.doc
-        self.finish_group = AsyncGroup(self.check_finished(self._finish_page_cb), name='finish', logger=self.log)
         self._prepared = True
 
     def require_debug_access(self, login=None, passwd=None):
@@ -285,14 +289,21 @@ class BaseHandler(tornado.web.RequestHandler):
         if self._headers_written:
             super(BaseHandler, self).send_error(status_code, **kwargs)
 
-        self.clear()
-
-        reason = None
         if 'exc_info' in kwargs:
             exception = kwargs['exc_info'][1]
-            if isinstance(exception, HTTPError) and exception.reason:
-                reason = exception.reason
+        else:
+            exception = None
 
+        reason = None
+        if isinstance(exception, HTTPError) and exception.reason:
+            reason = exception.reason
+
+        if isinstance(exception, HTTPErrorWithContent):
+            self.set_status(exception.status_code, reason=reason)
+            self.finish_with_postprocessors()
+            return
+
+        self.clear()
         self.set_status(status_code, reason=reason)
 
         try:
@@ -330,6 +341,7 @@ class BaseHandler(tornado.web.RequestHandler):
                 self.set_header(name, value)
 
         if finish_with_exception:
+            self.log.warning('Deprecated HTTPError handling, use HTTPErrorWithContent')
             self.json.clear()
 
             if getattr(exception, 'text', None) is not None:
