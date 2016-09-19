@@ -95,9 +95,6 @@ def preprocessor(func_or_deps_list):
 
 
 class BaseHandler(tornado.web.RequestHandler):
-
-    preprocessors = ()
-
     # to restore tornado.web.RequestHandler compatibility
     def __init__(self, application, request, logger, request_id=None, **kwargs):
         self._prepared = False
@@ -202,9 +199,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.stage_tag('prepare')
 
         self.add_future(
-            self._run_preprocessors(
-                self._get_preprocessors(self.add_preprocessor(*self.preprocessors)(self.get_page.__func__))
-            ),
+            self._run_preprocessors(self._get_preprocessors(self.get_page.__func__)),
             self._create_handler_method_wrapper(self.get_page)
         )
 
@@ -213,9 +208,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.stage_tag('prepare')
 
         self.add_future(
-            self._run_preprocessors(
-                self._get_preprocessors(self.add_preprocessor(*self.preprocessors)(self.post_page.__func__))
-            ),
+            self._run_preprocessors(self._get_preprocessors(self.post_page.__func__)),
             self._create_handler_method_wrapper(self.post_page)
         )
 
@@ -224,9 +217,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.stage_tag('prepare')
 
         self.add_future(
-            self._run_preprocessors(
-                self._get_preprocessors(self.add_preprocessor(*self.preprocessors)(self.get_page.__func__))
-            ),
+            self._run_preprocessors(self._get_preprocessors(self.get_page.__func__)),
             self._create_handler_method_wrapper(self.get_page)
         )
 
@@ -235,9 +226,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.stage_tag('prepare')
 
         self.add_future(
-            self._run_preprocessors(
-                self._get_preprocessors(self.add_preprocessor(*self.preprocessors)(self.delete_page.__func__))
-            ),
+            self._run_preprocessors(self._get_preprocessors(self.delete_page.__func__)),
             self._create_handler_method_wrapper(self.delete_page)
         )
 
@@ -246,9 +235,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.log.stage_tag('prepare')
 
         self.add_future(
-            self._run_preprocessors(
-                self._get_preprocessors(self.add_preprocessor(*self.preprocessors)(self.put_page.__func__))
-            ),
+            self._run_preprocessors(self._get_preprocessors(self.put_page.__func__)),
             self._create_handler_method_wrapper(self.put_page)
         )
 
@@ -537,23 +524,6 @@ class BaseHandler(tornado.web.RequestHandler):
             func(self, *(args + (_callback,)))
         except StopIteration:
             callback(*args)
-
-    @staticmethod
-    def add_preprocessor(*preprocessors_list):
-        def old_to_new(pp):
-            @wraps(pp)
-            def pp_replacement(handler):
-                future = Future()
-
-                def callback():
-                    future.set_result(None)
-
-                pp(handler, callback)
-                return future
-
-            return preprocessor(pp_replacement)
-
-        return preprocessor([old_to_new(pp) for pp in preprocessors_list])
 
     def add_template_postprocessor(self, postprocessor):
         self._template_postprocessors.append(postprocessor)
