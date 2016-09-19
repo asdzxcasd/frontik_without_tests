@@ -70,8 +70,6 @@ class BaseHandler(tornado.web.RequestHandler):
         self._debug_access = None
 
         self._template_postprocessors = []
-        self._early_postprocessors = []
-        self._late_postprocessors = []
         self._returned_methods = set()
 
         self._http_client = HttpClient(self, self.application.curl_http_client, self.modify_http_client_request)
@@ -242,23 +240,20 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def _finish_page_cb(self):
         if not self._finished:
-            def _callback():
-                for finish_group_done_hook in self._finish_group_done_hooks:
-                    finish_group_done_hook()
+            for finish_group_done_hook in self._finish_group_done_hooks:
+                finish_group_done_hook()
 
-                self.log.stage_tag('page')
+            self.log.stage_tag('page')
 
-                if self.text is not None:
-                    producer = self._generic_producer
-                elif not self.json.is_empty():
-                    producer = self.json_producer
-                else:
-                    producer = self.xml_producer
+            if self.text is not None:
+                producer = self._generic_producer
+            elif not self.json.is_empty():
+                producer = self.json_producer
+            else:
+                producer = self.xml_producer
 
-                self.log.debug('using %s producer', producer)
-                producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
-
-            self._call_postprocessors(self._early_postprocessors, _callback)
+            self.log.debug('using %s producer', producer)
+            producer(partial(self._call_postprocessors, self._template_postprocessors, self.finish))
         else:
             self.log.warning('trying to finish already finished page, probably bug in a workflow, ignoring')
 
@@ -366,18 +361,15 @@ class BaseHandler(tornado.web.RequestHandler):
         self.cleanup()
 
     def finish(self, chunk=None):
-        def _finish_with_async_hook():
-            self.log.stage_tag('postprocess')
-            super(BaseHandler, self).finish(chunk)
+        self.log.stage_tag('postprocess')
 
         try:
             for before_finish_hook in self._before_finish_hooks:
                 before_finish_hook()
 
-            self._call_postprocessors(self._late_postprocessors, _finish_with_async_hook)
+            super(BaseHandler, self).finish(chunk)
         except Exception as e:
-            self.log.stage_tag('postprocess')
-            self.log.exception('error during late postprocessing stage, finishing with an exception')
+            self.log.exception('error during finish, finishing with an exception')
 
             status_code = getattr(e, 'status_code', 500)
             self.clear()
@@ -460,12 +452,6 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def add_template_postprocessor(self, postprocessor):
         self._template_postprocessors.append(postprocessor)
-
-    def add_early_postprocessor(self, postprocessor):
-        self._early_postprocessors.append(postprocessor)
-
-    def add_late_postprocessor(self, postprocessor):
-        self._late_postprocessors.append(postprocessor)
 
     # Producers
 
