@@ -6,7 +6,7 @@ import weakref
 import jinja2
 import tornado.ioloop
 from tornado.concurrent import TracebackFuture
-from tornado.escape import to_unicode, utf8
+from tornado.escape import native_str, to_unicode, utf8
 from tornado.options import options
 from tornado.util import raise_exc_info
 
@@ -62,7 +62,7 @@ class JsonProducer(object):
             self._finish_with_json(callback)
 
     def set_template(self, filename):
-        self.template_filename = filename
+        self.template_filename = native_str(filename)
 
     def _finish_with_template(self, callback):
         if not self.environment:
