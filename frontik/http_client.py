@@ -52,8 +52,8 @@ class HttpClient(object):
         return futures
 
     def get_url(self, url, data=None, headers=None, connect_timeout=None, request_timeout=None,
-                callback=None, error_callback=None, follow_redirects=True, labels=None,
-                add_to_finish_group=True, parse_response=True, parse_on_error=False):
+                callback=None, follow_redirects=True, labels=None, add_to_finish_group=True,
+                parse_response=True, parse_on_error=False):
 
         future = Future()
         request = frontik.util.make_get_request(url, data, headers, connect_timeout, request_timeout, follow_redirects)
@@ -61,7 +61,7 @@ class HttpClient(object):
 
         self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            partial(self._parse_response, future, callback, parse_response, parse_on_error),
             add_to_finish_group=add_to_finish_group
         )
 
@@ -77,15 +77,15 @@ class HttpClient(object):
 
         self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, False, False),
+            partial(self._parse_response, future, callback, False, False),
             add_to_finish_group=add_to_finish_group
         )
 
         return future
 
     def post_url(self, url, data='', headers=None, files=None, connect_timeout=None, request_timeout=None,
-                 callback=None, error_callback=None, follow_redirects=True, content_type=None, labels=None,
-                 add_to_finish_group=True, parse_response=True, parse_on_error=False):
+                 callback=None, follow_redirects=True, content_type=None, labels=None, add_to_finish_group=True,
+                 parse_response=True, parse_on_error=False):
 
         future = Future()
         request = frontik.util.make_post_request(
@@ -95,15 +95,15 @@ class HttpClient(object):
 
         self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            partial(self._parse_response, future, callback, parse_response, parse_on_error),
             add_to_finish_group=add_to_finish_group
         )
 
         return future
 
     def put_url(self, url, data='', headers=None, connect_timeout=None, request_timeout=None,
-                callback=None, error_callback=None, content_type=None, labels=None,
-                add_to_finish_group=True, parse_response=True, parse_on_error=False):
+                callback=None, content_type=None, labels=None, add_to_finish_group=True,
+                parse_response=True, parse_on_error=False):
 
         future = Future()
         request = frontik.util.make_put_request(url, data, headers, content_type, connect_timeout, request_timeout)
@@ -111,15 +111,15 @@ class HttpClient(object):
 
         self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            partial(self._parse_response, future, callback, parse_response, parse_on_error),
             add_to_finish_group=add_to_finish_group
         )
 
         return future
 
     def delete_url(self, url, data=None, headers=None, connect_timeout=None, request_timeout=None,
-                   callback=None, error_callback=None, content_type=None, labels=None,
-                   add_to_finish_group=True, parse_response=True, parse_on_error=False):
+                   callback=None, content_type=None, labels=None, add_to_finish_group=True,
+                   parse_response=True, parse_on_error=False):
 
         future = Future()
         request = frontik.util.make_delete_request(url, data, headers, content_type, connect_timeout, request_timeout)
@@ -127,7 +127,7 @@ class HttpClient(object):
 
         self.fetch(
             request,
-            partial(self._parse_response, future, callback, error_callback, parse_response, parse_on_error),
+            partial(self._parse_response, future, callback, parse_response, parse_on_error),
             add_to_finish_group=add_to_finish_group
         )
 
@@ -224,7 +224,7 @@ class HttpClient(object):
 
         return response
 
-    def _parse_response(self, future, callback, error_callback, parse_response, parse_on_error, response):
+    def _parse_response(self, future, callback, parse_response, parse_on_error, response):
         data = None
         result = RequestResult()
 
@@ -242,9 +242,7 @@ class HttpClient(object):
         except FailedRequestException as ex:
             result.set_exception(ex)
 
-        if callable(error_callback) and (response.error or result.exception is not None):
-            error_callback(data, response)
-        elif callable(callback):
+        if callable(callback):
             callback(data, response)
 
         result.set(data, response)
@@ -307,7 +305,7 @@ def _check_response_request_id(request, response):
         response.error = HTTPError(599, message, response)
 
 
-def _parse_response(response, logger=request_logger, parser=None, response_type=None):
+def _parse_response(response, logger, parser=None, response_type=None):
     try:
         return parser(response.body)
     except:
