@@ -6,7 +6,6 @@ import logging
 from tornado.concurrent import Future
 
 from frontik.compat import basestring_type, iteritems
-from frontik.http_client import RequestResult
 
 future_logger = logging.getLogger('frontik.future')
 
@@ -18,26 +17,21 @@ def _encode_value(v):
     def _encode_dict(d):
         return {k: _encode_value(v) for k, v in iteritems(d)}
 
-    if isinstance(v, dict):
-        return _encode_dict(v)
-
-    elif isinstance(v, (set, frozenset, list, tuple)):
-        return _encode_iterable(v)
-
-    elif isinstance(v, RequestResult):
-        if v.exception is not None:
-            return JsonBuilder.get_error_node(v.exception)
-        return _encode_value(v.data)
-
-    elif isinstance(v, Future):
+    if isinstance(v, Future):
         if v.done():
             return _encode_value(v.result())
 
         future_logger.info('unresolved Future in JsonBuilder')
         return None
 
+    elif isinstance(v, dict):
+        return _encode_dict(v)
+
+    elif isinstance(v, (set, frozenset, list, tuple)):
+        return _encode_iterable(v)
+
     elif hasattr(v, 'to_dict'):
-        return _encode_dict(v.to_dict())
+        return _encode_value(v.to_dict())
 
     return v
 
@@ -92,7 +86,7 @@ class JsonBuilder(object):
     def _concat_chunks(self):
         result = {}
         for chunk in self._data:
-            if isinstance(chunk, (RequestResult, Future)) or hasattr(chunk, 'to_dict'):
+            if isinstance(chunk, Future) or hasattr(chunk, 'to_dict'):
                 chunk = _encode_value(chunk)
 
             if chunk is not None:

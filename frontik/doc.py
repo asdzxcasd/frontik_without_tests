@@ -7,7 +7,6 @@ import lxml.etree as etree
 from tornado.concurrent import Future
 
 from frontik.compat import basestring_type, iteritems
-from frontik.http_client import RequestResult
 
 doc_logger = logging.getLogger('frontik.doc')
 
@@ -58,61 +57,30 @@ class Doc(object):
         res = self.root_node.to_etree_element() if isinstance(self.root_node, Doc) else self.root_node
 
         def chunk_to_element(chunk):
-            if isinstance(chunk, list):
-                for chunk_i in chunk:
-                    for i in chunk_to_element(chunk_i):
-                        yield i
-
-            elif hasattr(chunk, 'to_etree_element'):
-                yield chunk.to_etree_element()
-
-            elif isinstance(chunk, RequestResult):
-                if chunk.exception is not None:
-                    yield self.get_error_node(chunk.exception)
-                else:
-                    for i in chunk_to_element(chunk.data):
-                        yield i
-
-            elif isinstance(chunk, Future):
+            if isinstance(chunk, Future):
                 if chunk.done():
                     for i in chunk_to_element(chunk.result()):
                         yield i
                 else:
                     self.logger.info('unresolved Future in Doc')
 
+            elif isinstance(chunk, list):
+                for chunk_i in chunk:
+                    for i in chunk_to_element(chunk_i):
+                        yield i
+
+            elif hasattr(chunk, 'to_etree_element'):
+                for i in chunk_to_element(chunk.to_etree_element()):
+                    yield i
+
             elif isinstance(chunk, etree._Element):
                 yield chunk
 
-            elif isinstance(chunk, basestring_type):
-                yield chunk
-
-            elif chunk is not None:
-                yield str(chunk)
-
-        last_element = None
-        for chunk_element in chunk_to_element(self.data):
-
-            if isinstance(chunk_element, basestring_type):
-                self.logger.warning('putting strings to Doc is deprecated')
-                try:
-                    self.logger.warning('chunk: %s...', chunk_element[:10])
-                except:
-                    pass
-
-                if last_element is not None:
-                    if last_element.tail:
-                        last_element.tail += chunk_element
-                    else:
-                        last_element.tail = chunk_element
-                else:
-                    if res.text:
-                        res.text += chunk_element
-                    else:
-                        res.text = chunk_element
-
             else:
-                res.append(chunk_element)
-                last_element = chunk_element
+                raise ValueError('Cannot put the value of type {} to the Doc'.format(type(chunk)))
+
+        for chunk_element in chunk_to_element(self.data):
+            res.append(chunk_element)
 
         return res
 

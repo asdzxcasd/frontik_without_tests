@@ -16,7 +16,9 @@ from tornado.options import options
 from frontik.async import AsyncGroup
 from frontik.auth import DEBUG_AUTH_HEADER_NAME
 from frontik.compat import iteritems
+from frontik.doc import Doc
 from frontik.handler_debug import PageHandlerDebug, response_from_debug
+from frontik.json_builder import JsonBuilder
 from frontik.loggers.request import logger as request_logger
 import frontik.util
 
@@ -267,6 +269,20 @@ class RequestResult(object):
 
     def set_exception(self, exception):
         self.exception = exception
+
+    def to_etree_element(self):
+        # TODO: add content type checks
+        if self.exception is not None:
+            return Doc.get_error_node(self.exception)
+
+        return self.data
+
+    def to_dict(self):
+        # TODO: add content type checks
+        if self.exception is not None:
+            return JsonBuilder.get_error_node(self.exception)
+
+        return self.data
 
 
 def _parse_response(response, logger=request_logger, parser=None, response_type=None):
